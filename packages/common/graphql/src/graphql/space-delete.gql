@@ -1,0 +1,3 @@
+mutation deleteSpace($workspaceId: String!, $spaceId: String!) {
+  deleteSpace(workspaceId: $workspaceId, spaceId: $spaceId)
+}

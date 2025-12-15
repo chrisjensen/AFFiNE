@@ -1,0 +1,3 @@
+mutation grantSpaceUserRole($workspaceId: String!, $input: GrantSpaceUserRoleInput!) {
+  grantSpaceUserRole(workspaceId: $workspaceId, input: $input)
+}

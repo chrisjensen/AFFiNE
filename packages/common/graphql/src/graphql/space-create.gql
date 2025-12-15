@@ -1,0 +1,11 @@
+mutation createSpace($input: CreateSpaceInput!) {
+  createSpace(input: $input) {
+    id
+    workspaceId
+    name
+    description
+    defaultRole
+    createdAt
+    updatedAt
+  }
+}

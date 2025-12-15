@@ -1,0 +1,15 @@
+query listWorkspaceSpaces($workspaceId: String!) {
+  workspace(id: $workspaceId) {
+    spaces {
+      id
+      workspaceId
+      name
+      description
+      defaultRole
+      role
+      createdAt
+      updatedAt
+      docCount
+    }
+  }
+}

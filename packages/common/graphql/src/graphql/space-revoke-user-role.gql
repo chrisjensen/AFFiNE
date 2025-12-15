@@ -1,0 +1,3 @@
+mutation revokeSpaceUserRole($workspaceId: String!, $input: RevokeSpaceUserRoleInput!) {
+  revokeSpaceUserRole(workspaceId: $workspaceId, input: $input)
+}

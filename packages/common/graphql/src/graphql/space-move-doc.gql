@@ -1,0 +1,3 @@
+mutation moveDocToSpace($input: MoveDocToSpaceInput!) {
+  moveDocToSpace(input: $input)
+}

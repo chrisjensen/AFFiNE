@@ -1,0 +1,28 @@
+query getSpace($workspaceId: String!, $spaceId: String!) {
+  getSpace(workspaceId: $workspaceId, spaceId: $spaceId) {
+    id
+    workspaceId
+    name
+    description
+    defaultRole
+    role
+    createdAt
+    updatedAt
+    permissions {
+      Space_Read
+      Space_Sync
+      Space_CreateDoc
+      Space_Delete
+      Space_Users_Manage
+      Space_Users_Read
+      Space_Settings_Update
+      Space_TransferOwner
+    }
+    owner {
+      id
+      name
+      avatarUrl
+    }
+    docCount
+  }
+}

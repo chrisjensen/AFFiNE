@@ -522,6 +522,13 @@ input CreateCopilotPromptInput {
   name: String!
 }
 
+input CreateSpaceInput {
+  defaultRole: DocRole
+  description: String
+  name: String!
+  workspaceId: String!
+}
+
 input CreateUserInput {
   email: String!
   name: String
@@ -846,6 +853,12 @@ input GrantDocUserRolesInput {
   workspaceId: String!
 }
 
+input GrantSpaceUserRoleInput {
+  role: DocRole!
+  spaceId: String!
+  userId: String!
+}
+
 type GrantedDocUserType {
   role: DocRole!
   user: WorkspaceUserType!
@@ -854,6 +867,16 @@ type GrantedDocUserType {
 type GrantedDocUserTypeEdge {
   cursor: String!
   node: GrantedDocUserType!
+}
+
+type GrantedSpaceUserType {
+  role: DocRole!
+  user: WorkspaceUserType!
+}
+
+type GrantedSpaceUserTypeEdge {
+  cursor: String!
+  node: GrantedSpaceUserType!
 }
 
 type GraphqlBadRequestDataType {
@@ -1193,6 +1216,14 @@ type MissingOauthQueryParameterDataType {
   name: String!
 }
 
+input MoveDocToSpaceInput {
+  docId: String!
+
+  """Target space ID, null to move to workspace root"""
+  spaceId: String
+  workspaceId: String!
+}
+
 type Mutation {
   acceptInviteById(inviteId: String!, sendAcceptMail: Boolean @deprecated(reason: "never used"), workspaceId: String @deprecated(reason: "never used")): Boolean!
   activateLicense(license: String!, workspaceId: String!): License!
@@ -1249,6 +1280,9 @@ type Mutation {
   createReply(input: ReplyCreateInput!): ReplyObjectType!
   createSelfhostWorkspaceCustomerPortal(workspaceId: String!): String!
 
+  """Create a new space in a workspace"""
+  createSpace(input: CreateSpaceInput!): SpaceType!
+
   """Create a new user"""
   createUser(input: CreateUserInput!): UserType!
 
@@ -1264,6 +1298,9 @@ type Mutation {
   """Delete a reply"""
   deleteReply(id: String!): Boolean!
 
+  """Delete a space"""
+  deleteSpace(spaceId: String!, workspaceId: String!): Boolean!
+
   """Delete a user account"""
   deleteUser(id: String!): DeleteAccount!
   deleteWorkspace(id: String!): Boolean!
@@ -1278,6 +1315,9 @@ type Mutation {
   grantDocUserRoles(input: GrantDocUserRolesInput!): Boolean!
   grantMember(permission: Permission!, userId: String!, workspaceId: String!): Boolean!
 
+  """Grant a user role in a space"""
+  grantSpaceUserRole(input: GrantSpaceUserRoleInput!, workspaceId: String!): Boolean!
+
   """import users"""
   importUsers(input: ImportUsersInput!): [UserImportResultType!]!
   installLicense(license: Upload!, workspaceId: String!): License!
@@ -1287,6 +1327,9 @@ type Mutation {
 
   """mention user in a doc"""
   mentionUser(input: MentionInput!): ID!
+
+  """Move a doc to a space (or to workspace root if spaceId is null)"""
+  moveDocToSpace(input: MoveDocToSpaceInput!): Boolean!
   publishDoc(docId: String!, mode: PublicDocMode = Page, workspaceId: String!): DocType!
   publishPage(mode: PublicDocMode = Page, pageId: String!, workspaceId: String!): DocType! @deprecated(reason: "use publishDoc instead")
 
@@ -1336,6 +1379,9 @@ type Mutation {
   revokeMember(userId: String!, workspaceId: String!): Boolean!
   revokePublicDoc(docId: String!, workspaceId: String!): DocType!
   revokePublicPage(docId: String!, workspaceId: String!): DocType! @deprecated(reason: "use revokePublicDoc instead")
+
+  """Revoke a user role from a space"""
+  revokeSpaceUserRole(input: RevokeSpaceUserRoleInput!, workspaceId: String!): Boolean!
   revokeUserAccessToken(id: String!): Boolean!
   sendChangeEmail(callbackUrl: String!, email: String): Boolean!
   sendChangePasswordEmail(callbackUrl: String!, email: String @deprecated(reason: "fetched from signed in user")): Boolean!
@@ -1372,6 +1418,9 @@ type Mutation {
 
   """Update user settings"""
   updateSettings(input: UpdateUserSettingsInput!): Boolean!
+
+  """Update space settings"""
+  updateSpace(input: UpdateSpaceInput!, spaceId: String!, workspaceId: String!): SpaceType!
   updateSubscriptionRecurring(idempotencyKey: String @deprecated(reason: "use header `Idempotency-Key`"), plan: SubscriptionPlan = Pro, recurring: SubscriptionRecurring!, workspaceId: String): SubscriptionType!
 
   """Update an user"""
@@ -1522,6 +1571,12 @@ type PaginatedGrantedDocUserType {
   totalCount: Int!
 }
 
+type PaginatedGrantedSpaceUserType {
+  edges: [GrantedSpaceUserTypeEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
 type PaginatedIgnoredDocsType {
   edges: [CopilotWorkspaceIgnoredDocTypeEdge!]!
   pageInfo: PageInfo!
@@ -1530,6 +1585,12 @@ type PaginatedIgnoredDocsType {
 
 type PaginatedNotificationObjectType {
   edges: [NotificationObjectTypeEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type PaginatedSpaceType {
+  edges: [SpaceTypeEdge!]!
   pageInfo: PageInfo!
   totalCount: Int!
 }
@@ -1586,6 +1647,9 @@ type Query {
 
   """get workspace invitation info"""
   getInviteInfo(inviteId: String!): InvitationType!
+
+  """Get a space by ID"""
+  getSpace(spaceId: String!, workspaceId: String!): SpaceType!
 
   """Get is admin of workspace"""
   isAdmin(workspaceId: String!): Boolean! @deprecated(reason: "use WorkspaceType[role] instead")
@@ -1735,6 +1799,11 @@ input RevokeDocUserRoleInput {
   docId: String!
   userId: String!
   workspaceId: String!
+}
+
+input RevokeSpaceUserRoleInput {
+  spaceId: String!
+  userId: String!
 }
 
 type RuntimeConfigNotFoundDataType {
@@ -1907,8 +1976,54 @@ type SpaceOwnerNotFoundDataType {
   spaceId: String!
 }
 
+type SpacePermissions {
+  Space_CreateDoc: Boolean!
+  Space_Delete: Boolean!
+  Space_Read: Boolean!
+  Space_Settings_Read: Boolean!
+  Space_Settings_Update: Boolean!
+  Space_Sync: Boolean!
+  Space_TransferOwner: Boolean!
+  Space_Users_Manage: Boolean!
+  Space_Users_Read: Boolean!
+}
+
 type SpaceShouldHaveOnlyOneOwnerDataType {
   spaceId: String!
+}
+
+type SpaceType {
+  avatarKey: String
+  createdAt: DateTime!
+  defaultRole: Int!
+  description: String
+
+  """Number of docs in this space"""
+  docCount: Int!
+
+  """IDs of docs in this space"""
+  docIds: [String!]!
+  id: ID!
+
+  """Paginated list of users with explicit space permissions"""
+  members(pagination: PaginationInput!): PaginatedGrantedSpaceUserType!
+  name: String!
+
+  """Space owner"""
+  owner: PublicUserType
+
+  """Current user permissions in this space"""
+  permissions: SpacePermissions!
+
+  """Current user role in this space"""
+  role: DocRole!
+  updatedAt: DateTime!
+  workspaceId: String!
+}
+
+type SpaceTypeEdge {
+  cursor: String!
+  node: SpaceType!
 }
 
 type StreamObject {
@@ -2065,6 +2180,12 @@ input UpdateDocUserRoleInput {
   role: DocRole!
   userId: String!
   workspaceId: String!
+}
+
+input UpdateSpaceInput {
+  defaultRole: DocRole
+  description: String
+  name: String
 }
 
 input UpdateUserInput {
@@ -2345,6 +2466,9 @@ type WorkspaceType {
   """Cloud page metadata of workspace"""
   pageMeta(pageId: String!): WorkspaceDocMeta! @deprecated(reason: "use [WorkspaceType.doc] instead")
 
+  """Get paginated spaces in the workspace"""
+  paginatedSpaces(pagination: PaginationInput!): PaginatedSpaceType!
+
   """map of action permissions"""
   permissions: WorkspacePermissions!
 
@@ -2372,6 +2496,12 @@ type WorkspaceType {
 
   """Search docs by keyword"""
   searchDocs(input: SearchDocsInput!): [SearchDocObjectType!]!
+
+  """Get a specific space by ID"""
+  space(spaceId: String!): SpaceType
+
+  """Get all accessible spaces in the workspace"""
+  spaces: [SpaceType!]!
 
   """The team subscription of the workspace, if exists."""
   subscription: SubscriptionType

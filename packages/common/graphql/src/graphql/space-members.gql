@@ -1,0 +1,22 @@
+query getSpaceMembers($workspaceId: String!, $spaceId: String!, $pagination: PaginationInput!) {
+  getSpace(workspaceId: $workspaceId, spaceId: $spaceId) {
+    members(pagination: $pagination) {
+      totalCount
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+      edges {
+        node {
+          role
+          user {
+            id
+            name
+            email
+            avatarUrl
+          }
+        }
+      }
+    }
+  }
+}

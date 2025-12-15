@@ -1,0 +1,11 @@
+mutation updateSpace($workspaceId: String!, $spaceId: String!, $input: UpdateSpaceInput!) {
+  updateSpace(workspaceId: $workspaceId, spaceId: $spaceId, input: $input) {
+    id
+    workspaceId
+    name
+    description
+    defaultRole
+    createdAt
+    updatedAt
+  }
+}
