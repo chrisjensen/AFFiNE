@@ -73,6 +73,23 @@ export const Actions = {
       Resolve: '',
     },
   },
+
+  // Space Actions (permission-isolated containers within a workspace)
+  Space: {
+    Read: '',
+    Sync: '',
+    CreateDoc: '',
+    Delete: '',
+    TransferOwner: '',
+    Users: {
+      Read: '',
+      Manage: '',
+    },
+    Settings: {
+      Read: '',
+      Update: '',
+    },
+  },
 } as const;
 
 export const RoleActionsMap = {
@@ -160,6 +177,39 @@ export const RoleActionsMap = {
       return [...this[DocRole.Manager], Action.Doc.TransferOwner];
     },
   },
+  // Space roles use DocRole values but map to Space actions
+  SpaceRole: {
+    get [DocRole.External]() {
+      return [Action.Space.Read, Action.Space.Settings.Read];
+    },
+    get [DocRole.Reader]() {
+      return [...this[DocRole.External], Action.Space.Users.Read];
+    },
+    get [DocRole.Commenter]() {
+      return this[DocRole.Reader];
+    },
+    get [DocRole.Editor]() {
+      return [
+        ...this[DocRole.Reader],
+        Action.Space.Sync,
+        Action.Space.CreateDoc,
+      ];
+    },
+    get [DocRole.Manager]() {
+      return [
+        ...this[DocRole.Editor],
+        Action.Space.Users.Manage,
+        Action.Space.Settings.Update,
+      ];
+    },
+    get [DocRole.Owner]() {
+      return [
+        ...this[DocRole.Manager],
+        Action.Space.Delete,
+        Action.Space.TransferOwner,
+      ];
+    },
+  },
 } as const;
 
 type ResourceActionName<T extends keyof typeof Actions> =
@@ -167,9 +217,14 @@ type ResourceActionName<T extends keyof typeof Actions> =
 
 export type WorkspaceAction = ResourceActionName<'Workspace'>;
 export type DocAction = ResourceActionName<'Doc'>;
-export type Action = WorkspaceAction | DocAction;
+export type SpaceAction = ResourceActionName<'Space'>;
+export type Action = WorkspaceAction | DocAction | SpaceAction;
 export type WorkspaceActionPermissions = Record<WorkspaceAction, boolean>;
 export type DocActionPermissions = Record<DocAction, boolean>;
+export type SpaceActionPermissions = Record<SpaceAction, boolean>;
+
+// Use DocRole for Space roles (same permission levels)
+export type SpaceRole = DocRole;
 
 const cache = new WeakMap<object, any>();
 const buildPathReader = (
@@ -210,6 +265,7 @@ export const Action: LeafVisitor<typeof Actions> = buildPathReader(
 export const WORKSPACE_ACTIONS =
   RoleActionsMap.WorkspaceRole[WorkspaceRole.Owner];
 export const DOC_ACTIONS = RoleActionsMap.DocRole[DocRole.Owner];
+export const SPACE_ACTIONS = RoleActionsMap.SpaceRole[DocRole.Owner];
 
 export function mapWorkspaceRoleToPermissions(
   workspaceRole: WorkspaceRole | null
@@ -241,6 +297,23 @@ export function mapDocRoleToPermissions(docRole: DocRole | null) {
   }
 
   RoleActionsMap.DocRole[docRole].forEach(action => {
+    permissions[action] = true;
+  });
+
+  return permissions;
+}
+
+export function mapSpaceRoleToPermissions(spaceRole: SpaceRole | null) {
+  const permissions = SPACE_ACTIONS.reduce((map, action) => {
+    map[action] = false;
+    return map;
+  }, {} as SpaceActionPermissions);
+
+  if (spaceRole === null || spaceRole === DocRole.None) {
+    return permissions;
+  }
+
+  RoleActionsMap.SpaceRole[spaceRole].forEach(action => {
     permissions[action] = true;
   });
 
@@ -366,5 +439,45 @@ export function workspaceActionRequiredRole(
   return (
     WORKSPACE_ACTION_TO_MINIMAL_ROLE_MAP.get(action) ??
     /* if we forget to put new action to [RoleActionsMap.WorkspaceRole] */ WorkspaceRole.Owner
+  );
+}
+
+/**
+ * a map from [SpaceRole] to { [SpaceActionName]: boolean }
+ */
+const SpaceRolePermissionsMap = new Map(
+  Object.values(DocRole)
+    .filter(r => typeof r === 'number')
+    .map(spaceRole => {
+      const permissions = mapSpaceRoleToPermissions(spaceRole as SpaceRole);
+      return [spaceRole, permissions] as [
+        SpaceRole,
+        Record<SpaceAction, boolean>,
+      ];
+    })
+);
+
+/**
+ * a map from [SpaceActionName] to required [SpaceRole]
+ * @testonly use [spaceActionRequiredRole] instead
+ */
+export const SPACE_ACTION_TO_MINIMAL_ROLE_MAP = new Map(
+  RoleActionsMap.SpaceRole[DocRole.Owner].map(
+    action =>
+      [
+        action,
+        Math.min(
+          ...[...SpaceRolePermissionsMap.entries()]
+            .filter(([_, permissions]) => permissions[action])
+            .map(([role, _]) => role)
+        ),
+      ] as [SpaceAction, SpaceRole]
+  )
+);
+
+export function spaceActionRequiredRole(action: SpaceAction): SpaceRole {
+  return (
+    SPACE_ACTION_TO_MINIMAL_ROLE_MAP.get(action) ??
+    /* if we forget to put new action to [RoleActionsMap.SpaceRole] */ DocRole.Owner
   );
 }

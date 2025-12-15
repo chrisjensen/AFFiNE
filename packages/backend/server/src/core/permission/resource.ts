@@ -1,6 +1,13 @@
-import { DocAction, DocRole, WorkspaceAction, WorkspaceRole } from './types';
+import {
+  DocAction,
+  DocRole,
+  SpaceAction,
+  SpaceRole,
+  WorkspaceAction,
+  WorkspaceRole,
+} from './types';
 
-export type ResourceType = 'ws' | 'doc';
+export type ResourceType = 'ws' | 'doc' | 'space';
 
 interface WorkspaceResource {
   type: 'ws';
@@ -25,7 +32,18 @@ interface DocResource {
   role: DocRole;
 }
 
-export type KnownResource = WorkspaceResource | DocResource;
+interface SpaceResource {
+  type: 'space';
+  payload: {
+    workspaceId: string;
+    spaceId: string;
+    userId: string;
+  };
+  action: SpaceAction;
+  role: SpaceRole;
+}
+
+export type KnownResource = WorkspaceResource | DocResource | SpaceResource;
 export type Resource<Type extends ResourceType = 'ws'> = Extract<
   KnownResource,
   { type: Type }

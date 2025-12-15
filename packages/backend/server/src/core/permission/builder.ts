@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { DocID } from '../utils/doc';
 import { getAccessController } from './controller';
 import { Resource } from './resource';
-import { DocAction, WorkspaceAction } from './types';
+import { DocAction, SpaceAction, WorkspaceAction } from './types';
 import { WorkspaceAccessController } from './workspace';
 
 @Injectable()
@@ -51,6 +51,14 @@ export class UserAccessControllerBuilder {
       docId,
     });
   }
+
+  space(workspaceId: string, spaceId: string) {
+    return new SpaceAccessControllerBuilder({
+      userId: this.userId,
+      workspaceId,
+      spaceId,
+    });
+  }
 }
 
 class WorkspaceAccessControllerBuilder {
@@ -65,6 +73,14 @@ class WorkspaceAccessControllerBuilder {
     return new DocAccessControllerBuilder({
       ...this.data,
       docId,
+    });
+  }
+
+  space(spaceId: string) {
+    return new SpaceAccessControllerBuilder({
+      workspaceId: this.data.workspaceId,
+      userId: this.data.userId,
+      spaceId,
     });
   }
 
@@ -126,6 +142,25 @@ class DocAccessControllerBuilder {
 
   async permissions() {
     const checker = getAccessController('doc');
+    return await checker.role(this.data);
+  }
+}
+
+class SpaceAccessControllerBuilder {
+  constructor(public readonly data: Resource<'space'>) {}
+
+  async assert(action: SpaceAction) {
+    const checker = getAccessController('space');
+    await checker.assert(this.data, action);
+  }
+
+  async can(action: SpaceAction) {
+    const checker = getAccessController('space');
+    return await checker.can(this.data, action);
+  }
+
+  async permissions() {
+    const checker = getAccessController('space');
     return await checker.role(this.data);
   }
 }
