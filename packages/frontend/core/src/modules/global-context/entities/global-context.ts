@@ -24,6 +24,12 @@ export class GlobalContext extends Entity {
   collectionId = this.define<string>('collectionId');
 
   /**
+   * is in space page
+   */
+  isSpace = this.define<boolean>('isSpace');
+  spaceId = this.define<string>('spaceId');
+
+  /**
    * is in trash page
    */
   isTrash = this.define<boolean>('isTrash');

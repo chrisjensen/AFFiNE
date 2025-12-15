@@ -214,6 +214,10 @@ export class Workbench extends Entity {
     this.open(`/collection/${collectionId}`, options);
   }
 
+  openSpace(spaceId: string, options?: WorkbenchOpenOptions) {
+    this.open(`/space/${spaceId}`, options);
+  }
+
   openAll(options?: WorkbenchOpenOptions) {
     this.open('/all', options);
   }

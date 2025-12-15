@@ -199,10 +199,14 @@ export const SplitView = ({
 
           if (to) {
             workbench.createView(at, to);
-            track.$.splitViewIndicator.$.openInSplitView({
-              type: entity?.type,
-              route: to,
-            });
+            // Only track if entity type is a valid OrganizeItemType (excludes 'space', 'custom-property')
+            const trackableType = entity?.type;
+            if (trackableType && trackableType !== 'space') {
+              track.$.splitViewIndicator.$.openInSplitView({
+                type: trackableType as 'doc' | 'folder' | 'collection' | 'tag',
+                route: to,
+              });
+            }
           }
         }
       },

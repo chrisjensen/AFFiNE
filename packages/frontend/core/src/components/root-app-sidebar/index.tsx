@@ -35,6 +35,7 @@ import {
   NavigationPanelFavorites,
   NavigationPanelMigrationFavorites,
   NavigationPanelOrganize,
+  NavigationPanelSpaces,
   NavigationPanelTags,
 } from '../../desktop/components/navigation-panel';
 import { WorkbenchService } from '../../modules/workbench';
@@ -225,6 +226,7 @@ export const RootAppSidebar = memo((): ReactElement => {
       <SidebarScrollableContainer>
         <NavigationPanelFavorites />
         <NavigationPanelOrganize />
+        <NavigationPanelSpaces />
         <NavigationPanelMigrationFavorites />
         <NavigationPanelTags />
         <NavigationPanelCollections />

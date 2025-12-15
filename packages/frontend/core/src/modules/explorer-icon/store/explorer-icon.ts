@@ -3,7 +3,7 @@ import { Store } from '@toeverything/infra';
 
 import type { WorkspaceDBService } from '../../db';
 
-export type ExplorerType = 'doc' | 'collection' | 'folder' | 'tag';
+export type ExplorerType = 'doc' | 'collection' | 'folder' | 'tag' | 'space';
 
 export class ExplorerIconStore extends Store {
   constructor(private readonly dbService: WorkspaceDBService) {

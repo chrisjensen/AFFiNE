@@ -18,6 +18,10 @@ export type AffineDNDEntity =
       id: string;
     }
   | {
+      type: 'space';
+      id: string;
+    }
+  | {
       type: 'custom-property';
       id: string;
     };
@@ -64,6 +68,13 @@ export interface AffineDNDData extends DNDData {
         }
       | {
           at: 'navigation-panel:tags:docs';
+        }
+      | {
+          at: 'navigation-panel:space:list';
+        }
+      | {
+          at: 'navigation-panel:space:docs';
+          spaceId: string;
         }
       | {
           at: 'app-header:tabs';
@@ -125,6 +136,9 @@ export interface AffineDNDData extends DNDData {
       }
     | {
         at: 'navigation-panel:tag';
+      }
+    | {
+        at: 'navigation-panel:space';
       }
     | {
         at: 'app-header:tabs';

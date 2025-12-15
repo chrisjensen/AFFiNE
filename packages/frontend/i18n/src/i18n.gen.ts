@@ -4842,6 +4842,126 @@ export function useAFFiNEI18N(): {
       */
     ["com.affine.rootAppSidebar.resize-handle.tooltip.click"](): string;
     /**
+      * `Spaces`
+      */
+    ["com.affine.rootAppSidebar.spaces"](): string;
+    /**
+      * `New space`
+      */
+    ["com.affine.rootAppSidebar.spaces.add-tooltip"](): string;
+    /**
+      * `Create space`
+      */
+    ["com.affine.rootAppSidebar.spaces.create"](): string;
+    /**
+      * `Spaces let you organize documents with their own permissions. Members see only spaces they have access to.`
+      */
+    ["com.affine.rootAppSidebar.spaces.createTips"](): string;
+    /**
+      * `No spaces`
+      */
+    ["com.affine.rootAppSidebar.spaces.empty"](): string;
+    /**
+      * `Space name`
+      */
+    ["com.affine.rootAppSidebar.spaces.name"](): string;
+    /**
+      * `Enter space name`
+      */
+    ["com.affine.rootAppSidebar.spaces.name.placeholder"](): string;
+    /**
+      * `Space deleted`
+      */
+    ["com.affine.space.deleted"](): string;
+    /**
+      * `Document moved to space`
+      */
+    ["com.affine.space.docMoved"](): string;
+    /**
+      * `Document removed from space`
+      */
+    ["com.affine.space.docRemoved"](): string;
+    /**
+      * `Drop docs here`
+      */
+    ["com.affine.space.empty"](): string;
+    /**
+      * `Remove from space`
+      */
+    ["com.affine.space.removeDoc"](): string;
+    /**
+      * `Space settings`
+      */
+    ["com.affine.space.settings"](): string;
+    /**
+      * `Space Name`
+      */
+    ["com.affine.space.name"](): string;
+    /**
+      * `Enter space name`
+      */
+    ["com.affine.space.name.placeholder"](): string;
+    /**
+      * `Description`
+      */
+    ["com.affine.space.description"](): string;
+    /**
+      * `Enter space description (optional)`
+      */
+    ["com.affine.space.description.placeholder"](): string;
+    /**
+      * `Default Role for Workspace Members`
+      */
+    ["com.affine.space.defaultRole"](): string;
+    /**
+      * `General`
+      */
+    ["com.affine.space.general"](): string;
+    /**
+      * `Members`
+      */
+    ["com.affine.space.members"](): string;
+    /**
+      * `Member management coming soon. Use the default role setting to control access for workspace members.`
+      */
+    ["com.affine.space.membersComingSoon"](): string;
+    /**
+      * `Danger Zone`
+      */
+    ["com.affine.space.dangerZone"](): string;
+    /**
+      * `Delete Space`
+      */
+    ["com.affine.space.delete"](): string;
+    /**
+      * `Delete Space`
+      */
+    ["com.affine.space.deleteSpace"](): string;
+    /**
+      * `Are you sure you want to delete this space? This action cannot be undone.`
+      */
+    ["com.affine.space.deleteConfirm"](): string;
+    /**
+      * `Delete Space?`
+      */
+    ["com.affine.space.deleteConfirmTitle"](): string;
+    /**
+      * `Deleting this space will remove all permission settings. Documents will remain in the workspace but will no longer be grouped. This action cannot be undone.`
+      */
+    ["com.affine.space.deleteConfirmDescription"](): string;
+    /**
+      * `Type the space name to confirm:`
+      */
+    ["com.affine.space.deleteConfirmInstruction"](): string;
+    /**
+      * `Deleting this space will remove all permission settings. Documents will remain in the workspace but will no longer be grouped.`
+      */
+    ["com.affine.space.deleteDescription"](): string;
+    /**
+      * `Saving...`
+      */
+    ["com.affine.saving"](): string;
+    /**
       * `Type here ...`
       */
     ["com.affine.search-tags.placeholder"](): string;
