@@ -28,7 +28,7 @@ import {
   PgUserspaceDocStorageAdapter,
   PgWorkspaceDocStorageAdapter,
 } from '../doc';
-import { AccessController, WorkspaceAction } from '../permission';
+import { AccessController, SpaceAction, WorkspaceAction } from '../permission';
 import { DocID } from '../utils/doc';
 
 const SubscribeMessage = (event: string) =>
@@ -478,7 +478,7 @@ abstract class SyncSocketAdapter {
   abstract assertAccessible(
     spaceId: string,
     userId: string,
-    action: WorkspaceAction
+    action: WorkspaceAction | SpaceAction
   ): Promise<void>;
 
   async push(
@@ -508,6 +508,9 @@ abstract class SyncSocketAdapter {
 }
 
 class WorkspaceSyncAdapter extends SyncSocketAdapter {
+  // Cache to avoid repeated lookups: spaceId -> workspaceId (or null if spaceId is a workspace)
+  private readonly spaceToWorkspaceCache = new Map<string, string | null>();
+
   constructor(
     client: Socket,
     storage: DocStorageAdapter,
@@ -543,12 +546,46 @@ class WorkspaceSyncAdapter extends SyncSocketAdapter {
     return await this.docReader.getDocDiff(spaceId, docId, stateVector);
   }
 
+  /**
+   * Check if the given ID is a Space (permission-isolated container) or a Workspace.
+   * Returns the workspace ID if it's a Space, null if it's a Workspace.
+   */
+  private async getSpaceWorkspaceId(spaceId: string): Promise<string | null> {
+    if (this.spaceToWorkspaceCache.has(spaceId)) {
+      return this.spaceToWorkspaceCache.get(spaceId) ?? null;
+    }
+
+    // Try to find a Space with this ID
+    const space = await this.models.space.get(spaceId);
+    const workspaceId = space?.workspaceId ?? null;
+
+    this.spaceToWorkspaceCache.set(spaceId, workspaceId);
+    return workspaceId;
+  }
+
   async assertAccessible(
     spaceId: string,
     userId: string,
-    action: WorkspaceAction
+    action: WorkspaceAction | SpaceAction
   ) {
-    await this.ac.user(userId).workspace(spaceId).assert(action);
+    // Check if spaceId is actually a Space (permission-isolated container)
+    const workspaceId = await this.getSpaceWorkspaceId(spaceId);
+
+    if (workspaceId) {
+      // spaceId is a Space - check Space-level permission
+      // Map Workspace.Sync to Space.Sync for the permission check
+      const spaceAction = action === 'Workspace.Sync' ? 'Space.Sync' : action;
+      await this.ac
+        .user(userId)
+        .space(workspaceId, spaceId)
+        .assert(spaceAction as SpaceAction);
+    } else {
+      // spaceId is a Workspace - use existing behavior
+      await this.ac
+        .user(userId)
+        .workspace(spaceId)
+        .assert(action as WorkspaceAction);
+    }
   }
 }
 
@@ -560,7 +597,7 @@ class UserspaceSyncAdapter extends SyncSocketAdapter {
   async assertAccessible(
     spaceId: string,
     userId: string,
-    _action: WorkspaceAction
+    _action: WorkspaceAction | SpaceAction
   ) {
     if (spaceId !== userId) {
       throw new SpaceAccessDenied({ spaceId });
