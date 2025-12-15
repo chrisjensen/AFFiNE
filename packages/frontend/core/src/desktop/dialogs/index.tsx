@@ -22,6 +22,7 @@ import { DocSelectorDialog } from './selectors/doc';
 import { TagSelectorDialog } from './selectors/tag';
 import { SettingDialog } from './setting';
 import { SignInDialog } from './sign-in';
+import { SpaceSettingDialog } from './space-setting';
 import { VerifyEmailDialog } from './verify-email';
 
 const GLOBAL_DIALOGS = {
@@ -46,6 +47,7 @@ const WORKSPACE_DIALOGS = {
   'doc-selector': DocSelectorDialog,
   'collection-selector': CollectionSelectorDialog,
   'date-selector': DateSelectorDialog,
+  'space-setting': SpaceSettingDialog,
   setting: SettingDialog,
   import: ImportDialog,
 } satisfies {
