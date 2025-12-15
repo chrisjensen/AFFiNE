@@ -1,4 +1,5 @@
 export { createFactory } from './factory';
+export * from './space.mock';
 export * from './team-workspace.mock';
 export * from './user.mock';
 export * from './workspace.mock';
@@ -12,6 +13,7 @@ import { MockDocUser } from './doc-user.mock';
 import { MockEventBus } from './eventbus.mock';
 import { MockMailer } from './mailer.mock';
 import { MockJobQueue } from './queue.mock';
+import { MockSpace, MockSpaceDoc, MockSpaceUser } from './space.mock';
 import { MockTeamWorkspace } from './team-workspace.mock';
 import { MockUser } from './user.mock';
 import { MockUserSettings } from './user-settings.mock';
@@ -28,6 +30,9 @@ export const Mockers = {
   DocSnapshot: MockDocSnapshot,
   DocUser: MockDocUser,
   AccessToken: MockAccessToken,
+  Space: MockSpace,
+  SpaceUser: MockSpaceUser,
+  SpaceDoc: MockSpaceDoc,
 };
 
 export { MockCopilotProvider, MockEventBus, MockJobQueue, MockMailer };

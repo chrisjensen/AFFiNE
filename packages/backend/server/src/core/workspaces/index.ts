@@ -14,10 +14,12 @@ import { WorkspaceEvents } from './event';
 import {
   DocHistoryResolver,
   DocResolver,
+  SpaceResolver,
   WorkspaceBlobResolver,
   WorkspaceDocResolver,
   WorkspaceMemberResolver,
   WorkspaceResolver,
+  WorkspaceSpaceResolver,
 } from './resolvers';
 import { WorkspaceService } from './service';
 
@@ -41,6 +43,8 @@ import { WorkspaceService } from './service';
     DocResolver,
     DocHistoryResolver,
     WorkspaceBlobResolver,
+    WorkspaceSpaceResolver,
+    SpaceResolver,
     WorkspaceService,
     WorkspaceEvents,
   ],

@@ -262,6 +262,7 @@ export class WorkspaceDocResolver {
 
   @ResolveField(() => PaginatedDocType)
   async docs(
+    @CurrentUser() me: CurrentUser,
     @Parent() workspace: WorkspaceType,
     @Args('pagination', PaginationInput.decode) pagination: PaginationInput
   ): Promise<PaginatedDocType> {
@@ -269,8 +270,12 @@ export class WorkspaceDocResolver {
       workspace.id,
       pagination
     );
+    const accessible = await this.ac
+      .user(me.id)
+      .workspace(workspace.id)
+      .docs(rows, 'Doc.Read');
 
-    return paginate(rows, 'createdAt', pagination, count);
+    return paginate(accessible, 'createdAt', pagination, count);
   }
 
   @ResolveField(() => PaginatedDocType, {
