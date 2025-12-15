@@ -50,6 +50,7 @@ model User {
   replies                      Reply[]
   commentAttachments           CommentAttachment[]            @relation("createdCommentAttachments")
   AccessToken                  AccessToken[]
+  spacePermissions             SpaceUserRole[]
 
   @@index([email])
   @@map("users")
@@ -133,6 +134,7 @@ model Workspace {
   embedFiles         AiWorkspaceFiles[]
   comments           Comment[]
   commentAttachments CommentAttachment[]
+  spaces             WorkspaceSpace[]
 
   @@index([lastCheckEmbeddings])
   @@map("workspaces")
@@ -223,6 +225,55 @@ model WorkspaceDocUserRole {
 
   @@id([workspaceId, docId, userId])
   @@map("workspace_page_user_permissions")
+}
+
+// Spaces - permission-isolated document containers within a workspace
+model WorkspaceSpace {
+  id          String   @id @default(uuid()) @db.VarChar
+  workspaceId String   @map("workspace_id") @db.VarChar
+  name        String   @db.VarChar
+  description String?  @db.VarChar
+  avatarKey   String?  @map("avatar_key") @db.VarChar
+  // Default role for workspace members: External=0, Reader=10, Commenter=15, Editor=20, Manager=30
+  defaultRole Int      @default(30) @map("default_role") @db.SmallInt
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  permissions SpaceUserRole[]
+  docs        SpaceDoc[]
+
+  @@index([workspaceId])
+  @@map("workspace_spaces")
+}
+
+// Per-user space access permissions
+model SpaceUserRole {
+  spaceId   String   @map("space_id") @db.VarChar
+  userId    String   @map("user_id") @db.VarChar
+  // External=0, Reader=10, Commenter=15, Editor=20, Manager=30, Owner=99
+  type      Int      @db.SmallInt
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  space WorkspaceSpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([spaceId, userId])
+  @@index([userId])
+  @@map("space_user_permissions")
+}
+
+// Space-to-doc mapping - tracks which docs belong to which space
+model SpaceDoc {
+  spaceId   String   @map("space_id") @db.VarChar
+  docId     String   @map("doc_id") @db.VarChar
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  space WorkspaceSpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@id([spaceId, docId])
+  @@index([docId])
+  @@map("space_docs")
 }
 
 model Feature {
