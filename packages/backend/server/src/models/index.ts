@@ -23,6 +23,9 @@ import { HistoryModel } from './history';
 import { NotificationModel } from './notification';
 import { MODELS_SYMBOL } from './provider';
 import { SessionModel } from './session';
+import { SpaceModel } from './space';
+import { SpaceDocModel } from './space-doc';
+import { SpaceUserModel } from './space-user';
 import { UserModel } from './user';
 import { UserDocModel } from './user-doc';
 import { UserFeatureModel } from './user-feature';
@@ -56,6 +59,9 @@ const MODELS = {
   commentAttachment: CommentAttachmentModel,
   blob: BlobModel,
   accessToken: AccessTokenModel,
+  space: SpaceModel,
+  spaceUser: SpaceUserModel,
+  spaceDoc: SpaceDocModel,
 };
 
 type ModelsType = {
@@ -121,6 +127,9 @@ export * from './feature';
 export * from './history';
 export * from './notification';
 export * from './session';
+export * from './space';
+export * from './space-doc';
+export * from './space-user';
 export * from './user';
 export * from './user-doc';
 export * from './user-feature';
