@@ -1,4 +1,4 @@
-import { Button, Input, Modal, RadioGroup } from '@affine/component';
+import { Button, Input, Modal } from '@affine/component';
 import type { DialogComponentProps } from '@affine/core/modules/dialogs';
 import type { WORKSPACE_DIALOG_SCHEMA } from '@affine/core/modules/dialogs/constant';
 import { type Space, SpaceService } from '@affine/core/modules/space';
@@ -7,9 +7,10 @@ import { useI18n } from '@affine/i18n';
 import { useLiveData, useService } from '@toeverything/infra';
 import { useCallback, useState } from 'react';
 
+import { SpaceDeleteModal } from './delete-space-modal';
 import * as styles from './style.css';
 
-type TabType = 'general' | 'members';
+type TabType = 'general' | 'members' | 'danger';
 
 const ROLE_OPTIONS = [
   {
@@ -42,7 +43,6 @@ const GeneralTab = ({
   onClose: () => void;
 }) => {
   const t = useI18n();
-  const spaceService = useService(SpaceService);
 
   const currentName = useLiveData(space.name$);
   const currentDescription = useLiveData(space.description$);
@@ -92,18 +92,6 @@ const GeneralTab = ({
     onClose,
   ]);
 
-  const handleDelete = useCallback(async () => {
-    if (
-      window.confirm(
-        t['com.affine.space.deleteConfirm']?.() ||
-          'Are you sure you want to delete this space? This action cannot be undone.'
-      )
-    ) {
-      await spaceService.deleteSpace(space.id);
-      onClose();
-    }
-  }, [space, spaceService, onClose, t]);
-
   return (
     <div className={styles.section}>
       <div className={styles.inputWrapper}>
@@ -150,12 +138,12 @@ const GeneralTab = ({
               data-selected={defaultRole === option.value}
               onClick={() => setDefaultRole(option.value)}
             >
-              <RadioGroup
-                value={String(defaultRole)}
-                onChange={(value: string) =>
-                  setDefaultRole(Number(value) as DocRole)
-                }
-                items={[{ value: String(option.value), label: '' }]}
+              <input
+                type="radio"
+                name="defaultRole"
+                className={styles.radioInput}
+                checked={defaultRole === option.value}
+                onChange={() => setDefaultRole(option.value)}
               />
               <div className={styles.roleInfo}>
                 <span className={styles.roleName}>{option.label}</span>
@@ -180,19 +168,6 @@ const GeneralTab = ({
           {isSaving
             ? t['com.affine.saving']?.() || 'Saving...'
             : t['Save']?.() || 'Save'}
-        </Button>
-      </div>
-
-      <div className={styles.dangerZone}>
-        <div className={styles.dangerTitle}>
-          {t['com.affine.space.dangerZone']?.() || 'Danger Zone'}
-        </div>
-        <div className={styles.dangerDescription}>
-          {t['com.affine.space.deleteDescription']?.() ||
-            'Deleting this space will remove all permission settings. Documents will remain in the workspace but will no longer be grouped.'}
-        </div>
-        <Button variant="error" onClick={() => void handleDelete()}>
-          {t['com.affine.space.delete']?.() || 'Delete Space'}
         </Button>
       </div>
     </div>
@@ -222,6 +197,53 @@ const MembersTab = ({ space: _space }: { space: Space }) => {
             'Member management coming soon. Use the default role setting to control access for workspace members.'}
         </div>
       </div>
+    </div>
+  );
+};
+
+const DangerZoneTab = ({
+  space,
+  onClose,
+}: {
+  space: Space;
+  onClose: () => void;
+}) => {
+  const t = useI18n();
+  const spaceService = useService(SpaceService);
+  const spaceName = useLiveData(space.name$) || '';
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  const handleDelete = useCallback(async () => {
+    await spaceService.deleteSpace(space.id);
+    setShowDeleteModal(false);
+    onClose();
+  }, [space, spaceService, onClose]);
+
+  return (
+    <div className={styles.section}>
+      <div className={styles.dangerZone}>
+        <div className={styles.dangerTitle}>
+          {t['com.affine.space.deleteSpace']?.() || 'Delete Space'}
+        </div>
+        <div className={styles.dangerDescription}>
+          {t['com.affine.space.deleteDescription']?.() ||
+            'Deleting this space will remove all permission settings. Documents will remain in the workspace but will no longer be grouped.'}
+        </div>
+        <Button
+          variant="error"
+          onClick={() => setShowDeleteModal(true)}
+          data-testid="delete-space-button"
+        >
+          {t['com.affine.space.delete']?.() || 'Delete Space'}
+        </Button>
+      </div>
+
+      <SpaceDeleteModal
+        open={showDeleteModal}
+        onOpenChange={setShowDeleteModal}
+        spaceName={spaceName}
+        onConfirm={() => void handleDelete()}
+      />
     </div>
   );
 };
@@ -277,12 +299,23 @@ export const SpaceSettingDialog = ({
           >
             {t['com.affine.space.members']?.() || 'Members'}
           </div>
+          <div
+            className={styles.tab}
+            data-active={activeTab === 'danger'}
+            data-danger="true"
+            onClick={() => setActiveTab('danger')}
+          >
+            {t['com.affine.space.dangerZone']?.() || 'Danger Zone'}
+          </div>
         </div>
 
         {activeTab === 'general' && (
           <GeneralTab space={space} onClose={onCancel} />
         )}
         {activeTab === 'members' && <MembersTab space={space} />}
+        {activeTab === 'danger' && (
+          <DangerZoneTab space={space} onClose={onCancel} />
+        )}
       </div>
     </Modal>
   );

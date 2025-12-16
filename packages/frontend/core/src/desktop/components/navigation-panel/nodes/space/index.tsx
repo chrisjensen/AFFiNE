@@ -4,6 +4,7 @@ import {
   MenuItem,
   toast,
 } from '@affine/component';
+import { SpaceDeleteModal } from '@affine/core/desktop/dialogs/space-setting/delete-space-modal';
 import { WorkspaceDialogService } from '@affine/core/modules/dialogs';
 import { GlobalContextService } from '@affine/core/modules/global-context';
 import { NavigationPanelService } from '@affine/core/modules/navigation-panel';
@@ -18,7 +19,7 @@ import {
   SettingsIcon,
 } from '@blocksuite/icons/rc';
 import { useLiveData, useService, useServices } from '@toeverything/infra';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import {
   NavigationPanelTreeNode,
@@ -79,6 +80,7 @@ export const NavigationPanelSpaceNode = ({
 
   const space = useLiveData(spaceService.space$(spaceId));
   const name = useLiveData(space?.name$);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const dndData = useMemo(() => {
     return {
@@ -171,8 +173,16 @@ export const NavigationPanelSpaceNode = ({
     if (!space) {
       return;
     }
+    setShowDeleteModal(true);
+  }, [space]);
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!space) {
+      return;
+    }
     spaceService.deleteSpace(space.id).catch(console.error);
     toast(t['com.affine.space.deleted']());
+    setShowDeleteModal(false);
   }, [space, spaceService, t]);
 
   const handleOpenSettings = useCallback(() => {
@@ -243,30 +253,38 @@ export const NavigationPanelSpaceNode = ({
   }
 
   return (
-    <NavigationPanelTreeNode
-      icon={SpaceIcon}
-      name={name || t['Untitled']()}
-      dndData={dndData}
-      onDrop={handleDropOnSpace}
-      renameable
-      collapsed={collapsed}
-      setCollapsed={setCollapsed}
-      to={`/space/${space.id}`}
-      active={active}
-      canDrop={handleCanDrop}
-      reorderable={reorderable}
-      onRename={handleRename}
-      childrenPlaceholder={<Empty onDrop={handleDropOnPlaceholder} />}
-      operations={finalOperations}
-      dropEffect={handleDropEffectOnSpace}
-      data-testid={`navigation-panel-space-${spaceId}`}
-      explorerIconConfig={{
-        where: 'space',
-        id: spaceId,
-      }}
-    >
-      <NavigationPanelSpaceNodeChildren space={space} path={path} />
-    </NavigationPanelTreeNode>
+    <>
+      <NavigationPanelTreeNode
+        icon={SpaceIcon}
+        name={name || t['Untitled']()}
+        dndData={dndData}
+        onDrop={handleDropOnSpace}
+        renameable
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        to={`/space/${space.id}`}
+        active={active}
+        canDrop={handleCanDrop}
+        reorderable={reorderable}
+        onRename={handleRename}
+        childrenPlaceholder={<Empty onDrop={handleDropOnPlaceholder} />}
+        operations={finalOperations}
+        dropEffect={handleDropEffectOnSpace}
+        data-testid={`navigation-panel-space-${spaceId}`}
+        explorerIconConfig={{
+          where: 'space',
+          id: spaceId,
+        }}
+      >
+        <NavigationPanelSpaceNodeChildren space={space} path={path} />
+      </NavigationPanelTreeNode>
+      <SpaceDeleteModal
+        open={showDeleteModal}
+        onOpenChange={setShowDeleteModal}
+        spaceName={name || ''}
+        onConfirm={handleConfirmDelete}
+      />
+    </>
   );
 };
 

@@ -1,5 +1,5 @@
 import { cssVar } from '@toeverything/theme';
-import { style } from '@vanilla-extract/css';
+import { globalStyle, style } from '@vanilla-extract/css';
 
 export const container = style({
   display: 'flex',
@@ -52,6 +52,11 @@ export const textarea = style({
   width: '100%',
   minHeight: 80,
   resize: 'vertical',
+});
+
+// Ensure text starts at top of textarea
+globalStyle(`${textarea} textarea, ${textarea} input`, {
+  verticalAlign: 'top',
 });
 
 export const roleSelector = style({
@@ -199,5 +204,47 @@ export const tab = style({
       color: cssVar('primaryColor'),
       borderBottomColor: cssVar('primaryColor'),
     },
+    '&[data-danger="true"]': {
+      color: cssVar('errorColor'),
+    },
+    '&[data-danger="true"]:hover': {
+      color: cssVar('errorColor'),
+    },
+    '&[data-danger="true"][data-active="true"]': {
+      color: cssVar('errorColor'),
+      borderBottomColor: cssVar('errorColor'),
+    },
   },
+});
+
+export const deleteModalContent = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 16,
+});
+
+export const deleteModalDescription = style({
+  fontSize: cssVar('fontSm'),
+  color: cssVar('textSecondaryColor'),
+  lineHeight: 1.5,
+  margin: 0,
+});
+
+export const deleteModalInstruction = style({
+  fontSize: cssVar('fontSm'),
+  color: cssVar('textPrimaryColor'),
+  fontWeight: 500,
+  margin: 0,
+});
+
+export const radioInput = style({
+  width: 16,
+  height: 16,
+  minWidth: 16,
+  minHeight: 16,
+  accentColor: cssVar('primaryColor'),
+  cursor: 'pointer',
+  flexShrink: 0,
+  margin: 0,
+  appearance: 'auto',
 });
