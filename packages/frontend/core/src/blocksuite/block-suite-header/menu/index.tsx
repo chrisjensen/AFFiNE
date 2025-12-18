@@ -28,6 +28,7 @@ import {
   DuplicateIcon,
   EdgelessIcon,
   EditIcon,
+  FolderIcon,
   FrameIcon,
   HistoryIcon,
   ImportIcon,
@@ -178,6 +179,10 @@ const PageHeaderMenuItem = ({
   const openInfoModal = useCallback(() => {
     track.$.header.pageInfo.open();
     workspaceDialogService.open('doc-info', { docId: pageId });
+  }, [workspaceDialogService, pageId]);
+
+  const handleMoveToSpace = useCallback(() => {
+    workspaceDialogService.open('move-to-space', { docId: pageId });
   }, [workspaceDialogService, pageId]);
 
   const handleOpenInNewTab = useCallback(() => {
@@ -422,6 +427,13 @@ const PageHeaderMenuItem = ({
         onSelect={openHistoryModal}
       >
         {t['com.affine.history.view-history-version']()}
+      </MenuItem>
+      <MenuItem
+        prefixIcon={<FolderIcon />}
+        data-testid="editor-option-menu-move-to-space"
+        onSelect={handleMoveToSpace}
+      >
+        {t['com.affine.space.moveToSpace']()}
       </MenuItem>
       <MenuSeparator />
       {!isJournal && (

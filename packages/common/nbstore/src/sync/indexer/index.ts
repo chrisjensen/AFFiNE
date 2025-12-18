@@ -111,8 +111,7 @@ export class IndexerSyncImpl implements IndexerSync {
    */
   readonly INDEXER_VERSION = 2;
   private abort: AbortController | null = null;
-  private readonly rootDocId = this.doc.spaceId;
-  private readonly status = new IndexerSyncStatus(this.rootDocId);
+  private readonly status = new IndexerSyncStatus(this.doc.spaceId);
 
   private readonly indexer: IndexerStorage;
   private readonly remote?: IndexerStorage;
@@ -266,38 +265,44 @@ export class IndexerSyncImpl implements IndexerSync {
     this.status.errorMessage = null;
     this.status.statusUpdatedSubject$.next(true);
 
-    console.log('indexer sync start');
+    console.log('[indexer] sync start - build time:', new Date().toISOString());
 
+    // Simple subscribeDocUpdate handler - just check if it's the workspace root doc
+    // or a tracked doc in docsInRootDoc. Don't try to detect space root docs here.
+    const workspaceRootDocId = this.doc.spaceId;
     const unsubscribe = this.doc.subscribeDocUpdate(update => {
       if (!this.status.rootDocReady) {
         return;
       }
-      if (update.docId === this.rootDocId) {
-        applyUpdate(this.status.rootDoc, update.bin);
+      if (update.docId === workspaceRootDocId) {
+        const rootDoc = this.status.getRootDoc(workspaceRootDocId);
+        if (rootDoc) {
+          applyUpdate(rootDoc, update.bin);
 
-        const allDocs = this.getAllDocsFromRootDoc();
+          const allDocs = this.getAllDocsFromRootDoc(rootDoc);
 
-        for (const [docId, { title }] of allDocs) {
-          const existingDoc = this.status.docsInRootDoc.get(docId);
-          if (!existingDoc) {
-            this.status.scheduleJob(docId);
-            this.status.docsInRootDoc.set(docId, { title });
-            this.status.statusUpdatedSubject$.next(docId);
-          } else {
-            if (existingDoc.title !== title) {
+          for (const [docId, { title }] of allDocs) {
+            const existingDoc = this.status.docsInRootDoc.get(docId);
+            if (!existingDoc) {
+              this.status.scheduleJob(docId);
               this.status.docsInRootDoc.set(docId, { title });
+              this.status.statusUpdatedSubject$.next(docId);
+            } else {
+              if (existingDoc.title !== title) {
+                this.status.docsInRootDoc.set(docId, { title });
+                this.status.statusUpdatedSubject$.next(docId);
+              }
+            }
+          }
+
+          for (const docId of this.status.docsInRootDoc.keys()) {
+            if (!allDocs.has(docId)) {
+              this.status.docsInRootDoc.delete(docId);
               this.status.statusUpdatedSubject$.next(docId);
             }
           }
+          this.status.scheduleJob(workspaceRootDocId);
         }
-
-        for (const docId of this.status.docsInRootDoc.keys()) {
-          if (!allDocs.has(docId)) {
-            this.status.docsInRootDoc.delete(docId);
-            this.status.statusUpdatedSubject$.next(docId);
-          }
-        }
-        this.status.scheduleJob(this.rootDocId);
       } else {
         const docId = update.docId;
         const existingDoc = this.status.docsInRootDoc.get(docId);
@@ -308,14 +313,19 @@ export class IndexerSyncImpl implements IndexerSync {
     });
 
     try {
-      const rootDocBin = (await this.doc.getDoc(this.rootDocId))?.bin;
+      // Initialize workspace root doc (simple original behavior)
+      const rootDocBin = (await this.doc.getDoc(workspaceRootDocId))?.bin;
       if (rootDocBin) {
-        applyUpdate(this.status.rootDoc, rootDocBin);
+        const rootDoc = this.status.getRootDoc(workspaceRootDocId);
+        if (rootDoc) {
+          applyUpdate(rootDoc, rootDocBin);
+        }
       }
 
-      this.status.scheduleJob(this.rootDocId);
+      this.status.scheduleJob(workspaceRootDocId);
 
-      const allDocs = this.getAllDocsFromRootDoc();
+      const rootDoc = this.status.getRootDoc(workspaceRootDocId);
+      const allDocs = rootDoc ? this.getAllDocsFromRootDoc(rootDoc) : new Map();
       this.status.docsInRootDoc = allDocs;
       this.status.statusUpdatedSubject$.next(true);
 
@@ -335,49 +345,59 @@ export class IndexerSyncImpl implements IndexerSync {
 
         const docId = await this.status.acceptJob(signal);
 
-        if (docId === this.rootDocId) {
+        if (docId === workspaceRootDocId) {
+          // This is the workspace root doc
           console.log('[indexer] start indexing root doc', docId);
           // #region crawl root doc
-          for (const [docId, { title }] of this.status.docsInRootDoc) {
-            const existingDoc = this.status.docsInIndexer.get(docId);
+          const currentRootDoc = this.status.getRootDoc(workspaceRootDocId);
+          if (!currentRootDoc) {
+            console.warn('[indexer] Root doc not found for', docId);
+            this.status.completeJob();
+            continue;
+          }
+
+          // Update or add docs from this root
+          for (const [childDocId, { title }] of this.status.docsInRootDoc) {
+            const existingDoc = this.status.docsInIndexer.get(childDocId);
             if (existingDoc) {
               if (existingDoc.title !== title) {
                 // need update
                 await this.indexer.update(
                   'doc',
-                  IndexerDocument.from(docId, {
-                    docId,
+                  IndexerDocument.from(childDocId, {
+                    docId: childDocId,
                     title,
                   })
                 );
-                this.status.docsInIndexer.set(docId, { title });
-                this.status.statusUpdatedSubject$.next(docId);
+                this.status.docsInIndexer.set(childDocId, { title });
+                this.status.statusUpdatedSubject$.next(childDocId);
               }
             } else {
               // need add
               await this.indexer.insert(
                 'doc',
-                IndexerDocument.from(docId, {
-                  docId,
+                IndexerDocument.from(childDocId, {
+                  docId: childDocId,
                   title,
                 })
               );
-              this.status.docsInIndexer.set(docId, { title });
-              this.status.statusUpdatedSubject$.next(docId);
+              this.status.docsInIndexer.set(childDocId, { title });
+              this.status.statusUpdatedSubject$.next(childDocId);
             }
           }
 
-          for (const docId of this.status.docsInIndexer.keys()) {
-            if (!this.status.docsInRootDoc.has(docId)) {
-              await this.indexer.delete('doc', docId);
+          // Remove docs that are no longer in the root doc
+          for (const indexedDocId of this.status.docsInIndexer.keys()) {
+            if (!this.status.docsInRootDoc.has(indexedDocId)) {
+              await this.indexer.delete('doc', indexedDocId);
               await this.indexer.deleteByQuery('block', {
                 type: 'match',
                 field: 'docId',
-                match: docId,
+                match: indexedDocId,
               });
-              await this.indexerSync.clearDocIndexedClock(docId);
-              this.status.docsInIndexer.delete(docId);
-              this.status.statusUpdatedSubject$.next(docId);
+              await this.indexerSync.clearDocIndexedClock(indexedDocId);
+              this.status.docsInIndexer.delete(indexedDocId);
+              this.status.statusUpdatedSubject$.next(indexedDocId);
             }
           }
           await this.refreshIfNeed();
@@ -427,10 +447,14 @@ export class IndexerSyncImpl implements IndexerSync {
             applyUpdate(docYDoc, docBin.bin);
 
             try {
+              // Use workspace root doc for crawling (backward compatibility)
+              const workspaceRootDoc =
+                this.status.getRootDoc(this.doc.spaceId) ??
+                new YDoc({ guid: this.doc.spaceId });
               const result = await crawlingDocData({
                 ydoc: docYDoc,
-                rootYDoc: this.status.rootDoc,
-                spaceId: this.status.rootDocId,
+                rootYDoc: workspaceRootDoc,
+                spaceId: this.doc.spaceId,
                 docId,
               });
               if (!result) {
@@ -500,10 +524,10 @@ export class IndexerSyncImpl implements IndexerSync {
   }
 
   /**
-   * Get all docs from the root doc, without deleted docs
+   * Get all docs from a specific root doc, without deleted docs
    */
-  private getAllDocsFromRootDoc() {
-    return readAllDocsFromRootDoc(this.status.rootDoc, {
+  private getAllDocsFromRootDoc(rootDoc: YDoc) {
+    return readAllDocsFromRootDoc(rootDoc, {
       includeTrash: false,
     });
   }
@@ -680,7 +704,7 @@ class IndexerSyncStatus {
   isReadonly = false;
   prioritySettings = new Map<string, number>();
   jobs = new AsyncPriorityQueue();
-  rootDoc = new YDoc({ guid: this.rootDocId });
+  rootDocs = new Map<string, YDoc>();
   rootDocReady = false;
   docsInIndexer = new Map<string, { title: string | undefined }>();
   docsInRootDoc = new Map<string, { title: string | undefined }>();
@@ -707,7 +731,7 @@ class IndexerSyncStatus {
       } else {
         subscribe.next({
           indexing: this.jobs.length() + (this.currentJob ? 1 : 0),
-          total: this.docsInRootDoc.size + 1,
+          total: this.docsInRootDoc.size + this.rootDocs.size,
           errorMessage: this.errorMessage,
           completed: this.rootDocReady && this.jobs.length() === 0,
           batterySaveMode: this.batterySaveMode,
@@ -759,8 +783,28 @@ class IndexerSyncStatus {
     );
   }
 
-  constructor(readonly rootDocId: string) {
-    this.prioritySettings.set(this.rootDocId, Infinity);
+  constructor(readonly workspaceRootDocId: string) {
+    this.prioritySettings.set(this.workspaceRootDocId, Infinity);
+    // Initialize workspace root doc
+    this.rootDocs.set(
+      this.workspaceRootDocId,
+      new YDoc({ guid: this.workspaceRootDocId })
+    );
+  }
+
+  getRootDoc(rootDocId: string): YDoc | undefined {
+    return this.rootDocs.get(rootDocId);
+  }
+
+  addRootDoc(rootDocId: string): YDoc {
+    if (!this.rootDocs.has(rootDocId)) {
+      const rootDoc = new YDoc({ guid: rootDocId });
+      this.rootDocs.set(rootDocId, rootDoc);
+      // Set high priority for root docs
+      this.prioritySettings.set(rootDocId, Infinity);
+      return rootDoc;
+    }
+    return this.rootDocs.get(rootDocId)!;
   }
 
   scheduleJob(docId: string) {
@@ -840,7 +884,12 @@ class IndexerSyncStatus {
     this.jobs.clear();
     this.docsInRootDoc.clear();
     this.docsInIndexer.clear();
-    this.rootDoc = new YDoc();
+    this.rootDocs.clear();
+    // Re-initialize workspace root doc
+    this.rootDocs.set(
+      this.workspaceRootDocId,
+      new YDoc({ guid: this.workspaceRootDocId })
+    );
     this.rootDocReady = false;
     this.currentJob = null;
     this.batterySaveMode = false;

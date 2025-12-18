@@ -4886,6 +4886,18 @@ export function useAFFiNEI18N(): {
       */
     ["com.affine.space.empty"](): string;
     /**
+      * `Space`
+      */
+    ["com.affine.space.space"](): string;
+    /**
+      * `No spaces available`
+      */
+    ["com.affine.space.no-spaces"](): string;
+    /**
+      * `New Document`
+      */
+    ["com.affine.space.newDoc"](): string;
+    /**
       * `Remove from space`
       */
     ["com.affine.space.removeDoc"](): string;
@@ -4957,6 +4969,114 @@ export function useAFFiNEI18N(): {
       * `Deleting this space will remove all permission settings. Documents will remain in the workspace but will no longer be grouped.`
       */
     ["com.affine.space.deleteDescription"](): string;
+    /**
+      * `Add Member`
+      */
+    ["com.affine.space.addMember"](): string;
+    /**
+      * `Add members`
+      */
+    ["com.affine.space.addMembers"](): string;
+    /**
+      * `Add to space`
+      */
+    ["com.affine.space.addToSpace"](): string;
+    /**
+      * `Member added to space`
+      */
+    ["com.affine.space.memberAdded"](): string;
+    /**
+      * `Members added to space`
+      */
+    ["com.affine.space.membersAdded"](): string;
+    /**
+      * `Member removed from space`
+      */
+    ["com.affine.space.memberRemoved"](): string;
+    /**
+      * `Member role updated`
+      */
+    ["com.affine.space.memberRoleUpdated"](): string;
+    /**
+      * `Failed to update member role`
+      */
+    ["com.affine.space.memberUpdateFailed"](): string;
+    /**
+      * `Remove`
+      */
+    ["com.affine.space.removeMember"](): string;
+    /**
+      * `Remove member from space?`
+      */
+    ["com.affine.space.removeMemberConfirm"](): string;
+    /**
+      * `This member will lose their explicit role in this space. They may still have access through the space's default role.`
+      */
+    ["com.affine.space.removeMemberDescription"](): string;
+    /**
+      * `Set as owner`
+      */
+    ["com.affine.space.setAsOwner"](): string;
+    /**
+      * `Transfer space ownership?`
+      */
+    ["com.affine.space.transferOwnerConfirm"](): string;
+    /**
+      * `You will lose owner privileges and become a manager of this space.`
+      */
+    ["com.affine.space.transferOwnerDescription"](): string;
+    /**
+      * `No members with explicit roles`
+      */
+    ["com.affine.space.noMembers"](): string;
+    /**
+      * `All workspace members have access through the default role. Add members to give them specific permissions.`
+      */
+    ["com.affine.space.noMembersDescription"](): string;
+    /**
+      * `Search workspace members...`
+      */
+    ["com.affine.space.searchMembers"](): string;
+    /**
+      * `Type to search workspace members`
+      */
+    ["com.affine.space.typeToSearch"](): string;
+    /**
+      * `Load more`
+      */
+    ["com.affine.space.loadMore"](): string;
+    /**
+      * `Move to Space...`
+      */
+    ["com.affine.space.moveToSpace"](): string;
+    /**
+      * `Moving document:`
+      */
+    ["com.affine.space.movingDoc"](): string;
+    /**
+      * `Select destination:`
+      */
+    ["com.affine.space.selectDestination"](): string;
+    /**
+      * `Default Space`
+      */
+    ["com.affine.space.workspaceRoot"](): string;
+    /**
+      * `Failed to move document`
+      */
+    ["com.affine.space.moveDocFailed"](): string;
+    /**
+      * `Moving...`
+      */
+    ["com.affine.space.moving"](): string;
+    /**
+      * `Move`
+      */
+    ["com.affine.space.move"](): string;
+    /**
+      * `Select space icon`
+      */
+    ["com.affine.space.icon.select"](): string;
     /**
       * `Saving...`
       */

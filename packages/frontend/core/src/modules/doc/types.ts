@@ -8,4 +8,19 @@ export interface DocCreateOptions {
   skipInit?: boolean;
   docProps?: DocProps;
   isTemplate?: boolean;
+  /**
+   * The space ID to create the doc in.
+   * If provided, the doc will be added to the space's meta.pages.
+   */
+  spaceId?: string;
+  /**
+   * Source document ID for context (e.g., template document ID).
+   * Used by middleware to determine space inheritance.
+   */
+  sourceDocId?: string;
+  /**
+   * Current document ID for context (e.g., document where command was invoked).
+   * Used by middleware to determine space inheritance.
+   */
+  currentDocId?: string;
 }

@@ -203,6 +203,12 @@ export const AllPage = () => {
                   method: 'is',
                   value: 'false',
                 },
+                {
+                  type: 'system',
+                  key: 'space-accessible',
+                  method: 'is',
+                  value: 'true',
+                },
               ],
             }
           : {
@@ -232,6 +238,12 @@ export const AllPage = () => {
                   key: 'trash',
                   method: 'is',
                   value: 'false',
+                },
+                {
+                  type: 'system',
+                  key: 'space-accessible',
+                  method: 'is',
+                  value: 'true',
                 },
               ],
             }

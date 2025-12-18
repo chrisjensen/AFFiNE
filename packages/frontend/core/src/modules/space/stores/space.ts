@@ -4,13 +4,40 @@ import type { WorkspaceServerService } from '../../cloud/services/workspace-serv
 import type { WorkspaceService } from '../../workspace';
 
 // Define types locally until GraphQL codegen runs
+// Values must match GraphQL enum names from backend schema.gql
 export enum DocRole {
-  External = 0,
-  Reader = 10,
-  Commenter = 20,
-  Editor = 30,
-  Manager = 40,
-  Owner = 99,
+  None = 'None',
+  External = 'External',
+  Reader = 'Reader',
+  Commenter = 'Commenter',
+  Editor = 'Editor',
+  Manager = 'Manager',
+  Owner = 'Owner',
+}
+
+// Backend stores defaultRole as numeric values (Int in GraphQL)
+// This maps numeric values to DocRole enum strings
+const NUMERIC_TO_DOC_ROLE: Record<number, DocRole> = {
+  [-32768]: DocRole.None, // -(1 << 15)
+  0: DocRole.External,
+  10: DocRole.Reader,
+  15: DocRole.Commenter,
+  20: DocRole.Editor,
+  30: DocRole.Manager,
+  99: DocRole.Owner,
+};
+
+export function numericToDocRole(
+  value: number | DocRole | null | undefined
+): DocRole {
+  if (value === null || value === undefined) {
+    return DocRole.External;
+  }
+  // If it's already a string (DocRole enum), return as-is
+  if (typeof value === 'string') {
+    return value as DocRole;
+  }
+  return NUMERIC_TO_DOC_ROLE[value] ?? DocRole.External;
 }
 
 export interface SpaceInfo {
@@ -18,7 +45,10 @@ export interface SpaceInfo {
   workspaceId: string;
   name: string;
   description: string | null;
-  defaultRole: DocRole;
+  icon: string | null;
+  // defaultRole comes from GraphQL as Int (number), but we convert to DocRole string
+  defaultRole: number | DocRole;
+  // role comes from GraphQL as DocRole enum (string)
   role: DocRole;
   createdAt: string;
   updatedAt: string;
@@ -40,12 +70,14 @@ export interface CreateSpaceInput {
   workspaceId: string;
   name: string;
   description?: string;
+  icon?: string;
   defaultRole?: DocRole;
 }
 
 export interface UpdateSpaceInput {
   name?: string;
   description?: string;
+  icon?: string;
   defaultRole?: DocRole;
 }
 
@@ -93,6 +125,7 @@ export class SpaceStore extends Store {
             workspaceId
             name
             description
+            icon
             defaultRole
             role
             createdAt
@@ -113,6 +146,25 @@ export class SpaceStore extends Store {
     return data.workspace?.spaces ?? [];
   }
 
+  async getHiddenDocIds(signal?: AbortSignal): Promise<string[]> {
+    const query = {
+      id: 'getHiddenDocIdsQuery',
+      query: `query getHiddenDocIds($workspaceId: String!) {
+        workspace(id: $workspaceId) {
+          hiddenDocIds
+        }
+      }`,
+    };
+
+    const data = await this.rawGql<{ workspace?: { hiddenDocIds?: string[] } }>(
+      query,
+      { workspaceId: this.workspaceId },
+      signal
+    );
+
+    return data.workspace?.hiddenDocIds ?? [];
+  }
+
   async getSpace(
     spaceId: string,
     signal?: AbortSignal
@@ -125,6 +177,7 @@ export class SpaceStore extends Store {
           workspaceId
           name
           description
+          icon
           defaultRole
           role
           createdAt
@@ -171,6 +224,7 @@ export class SpaceStore extends Store {
           workspaceId
           name
           description
+          icon
           defaultRole
           createdAt
           updatedAt
@@ -205,6 +259,7 @@ export class SpaceStore extends Store {
           workspaceId
           name
           description
+          icon
           defaultRole
           createdAt
           updatedAt
@@ -312,5 +367,68 @@ export class SpaceStore extends Store {
     );
 
     return data.moveDocToSpace;
+  }
+
+  async getSpaceMembers(
+    spaceId: string,
+    pagination: { first?: number; after?: string },
+    signal?: AbortSignal
+  ): Promise<{
+    edges: Array<{ node: SpaceMember }>;
+    pageInfo: { hasNextPage: boolean; endCursor: string | null };
+    totalCount: number;
+  }> {
+    const query = {
+      id: 'getSpaceMembersQuery',
+      query: `query getSpaceMembers($workspaceId: String!, $spaceId: String!, $first: Int, $after: String) {
+        getSpace(workspaceId: $workspaceId, spaceId: $spaceId) {
+          members(pagination: { first: $first, after: $after }) {
+            edges {
+              node {
+                role
+                user {
+                  id
+                  name
+                  email
+                  avatarUrl
+                }
+              }
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+            totalCount
+          }
+        }
+      }`,
+    };
+
+    const data = await this.rawGql<{
+      getSpace?: {
+        members: {
+          edges: Array<{ node: SpaceMember }>;
+          pageInfo: { hasNextPage: boolean; endCursor: string | null };
+          totalCount: number;
+        };
+      };
+    }>(
+      query,
+      {
+        workspaceId: this.workspaceId,
+        spaceId,
+        first: pagination.first,
+        after: pagination.after,
+      },
+      signal
+    );
+
+    return (
+      data.getSpace?.members ?? {
+        edges: [],
+        pageInfo: { hasNextPage: false, endCursor: null },
+        totalCount: 0,
+      }
+    );
   }
 }

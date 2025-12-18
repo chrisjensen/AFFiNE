@@ -27,10 +27,11 @@ export function configureEditorSettingModule(framework: Framework) {
       GlobalState,
     ])
     .scope(WorkspaceScope)
-    .impl(DocCreateMiddleware, EditorSettingDocCreateMiddleware, [
-      EditorSettingService,
-      AppThemeService,
-    ]);
+    .impl(
+      DocCreateMiddleware('editor-setting'),
+      EditorSettingDocCreateMiddleware,
+      [EditorSettingService, AppThemeService]
+    );
 }
 
 export function configureSpellCheckSettingModule(framework: Framework) {

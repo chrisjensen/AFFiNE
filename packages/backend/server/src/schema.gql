@@ -525,6 +525,7 @@ input CreateCopilotPromptInput {
 input CreateSpaceInput {
   defaultRole: DocRole
   description: String
+  icon: String
   name: String!
   workspaceId: String!
 }
@@ -2003,6 +2004,7 @@ type SpaceType {
 
   """IDs of docs in this space"""
   docIds: [String!]!
+  icon: String
   id: ID!
 
   """Paginated list of users with explicit space permissions"""
@@ -2185,6 +2187,7 @@ input UpdateDocUserRoleInput {
 input UpdateSpaceInput {
   defaultRole: DocRole
   description: String
+  icon: String
   name: String
 }
 
@@ -2438,6 +2441,9 @@ type WorkspaceType {
 
   """Enable url previous when sharing"""
   enableUrlPreview: Boolean!
+
+  """Get doc IDs that are hidden from the user (in inaccessible spaces)"""
+  hiddenDocIds: [String!]!
   histories(before: DateTime, guid: String!, take: Int): [DocHistoryType!]!
   id: ID!
 

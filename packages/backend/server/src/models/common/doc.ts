@@ -5,6 +5,11 @@ export interface Doc {
    * Can be workspace or user id.
    */
   spaceId: string;
+  /**
+   * The containing space ID. NULL means workspace root level (not in any space).
+   * Used for space-scoped document storage.
+   */
+  containerSpaceId?: string;
   docId: string;
   blob: Uint8Array;
   timestamp: number;

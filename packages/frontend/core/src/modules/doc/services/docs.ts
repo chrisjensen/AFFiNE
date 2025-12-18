@@ -312,7 +312,13 @@ export class DocsService extends Service {
    * @returns the id of the new doc
    */
   async duplicateFromTemplate(sourceDocId: string, _targetDocId?: string) {
-    const targetDocId = _targetDocId ?? this.createDoc().id;
+    // Get space ID from source template document via middleware
+    // The middleware will handle space assignment based on sourceDocId
+    const targetDocId =
+      _targetDocId ??
+      this.createDoc({
+        sourceDocId,
+      }).id;
 
     // check if source doc is removed
     if (this.list.doc$(sourceDocId).value?.trash$.value) {

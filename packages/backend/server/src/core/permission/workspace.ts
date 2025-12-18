@@ -93,6 +93,13 @@ export class WorkspaceAccessController extends AccessController<'ws'> {
 
     const workspaceRole = await this.getRole(payload);
 
+    // Check which docs are in spaces and if user has access to those spaces
+    const docSpaceAccessMap = await this.checkDocSpaceAccess(
+      payload,
+      docIds,
+      workspaceRole
+    );
+
     const userRoles = await this.models.docUser.findMany(
       payload.workspaceId,
       docIds,
@@ -117,6 +124,13 @@ export class WorkspaceAccessController extends AccessController<'ws'> {
     );
 
     for (const docId of docIds) {
+      // If doc is in a space the user doesn't have access to, deny access
+      const spaceAccess = docSpaceAccessMap.get(docId);
+      if (spaceAccess === false) {
+        docRoles.push(null);
+        continue;
+      }
+
       const userRole = userRolesMap.get(docId);
 
       let docRole: DocRole | null = userRole?.type ?? null;
@@ -136,6 +150,96 @@ export class WorkspaceAccessController extends AccessController<'ws'> {
     }
 
     return docRoles;
+  }
+
+  /**
+   * Check if user has access to the spaces that contain the given docs.
+   * Returns a Map of docId -> hasAccess (true/false, undefined if doc is not in a space).
+   *
+   * Note: With the Space-as-Container architecture, docs are stored with containerSpaceId
+   * and the sync gateway enforces boundaries at the storage layer. This method provides
+   * defense-in-depth for non-sync APIs (GraphQL queries, etc.) as an additional security layer.
+   */
+  private async checkDocSpaceAccess(
+    payload: Resource<'ws'>,
+    docIds: string[],
+    workspaceRole: WorkspaceRole | null
+  ): Promise<Map<string, boolean | undefined>> {
+    const result = new Map<string, boolean | undefined>();
+
+    // Workspace owner always has access to all spaces
+    if (workspaceRole === WorkspaceRole.Owner) {
+      for (const docId of docIds) {
+        result.set(docId, undefined); // undefined means "not restricted by space"
+      }
+      return result;
+    }
+
+    // Get space IDs for all docs
+    const docSpaceMap = await this.models.spaceDoc.getSpaceIdsForDocs(docIds);
+
+    // Find unique space IDs
+    const spaceIds = new Set<string>();
+    for (const [docId, spaceId] of docSpaceMap) {
+      if (spaceId) {
+        spaceIds.add(spaceId);
+      } else {
+        // Doc is not in a space, no space restriction
+        result.set(docId, undefined);
+      }
+    }
+
+    if (spaceIds.size === 0) {
+      return result;
+    }
+
+    // Get user's explicit roles in these spaces
+    const spaceUserRoles = await this.models.spaceUser.findMany(
+      Array.from(spaceIds),
+      payload.userId
+    );
+    const userSpaceRoleMap = new Map(
+      spaceUserRoles.map(r => [r.spaceId, r.type])
+    );
+
+    // Get spaces to check defaultRole
+    const spacesWithoutExplicitRole = Array.from(spaceIds).filter(
+      spaceId => !userSpaceRoleMap.has(spaceId)
+    );
+    const spaces =
+      spacesWithoutExplicitRole.length > 0
+        ? await this.models.space.findMany(spacesWithoutExplicitRole)
+        : [];
+    const spaceDefaultRoleMap = new Map(spaces.map(s => [s.id, s.defaultRole]));
+
+    // For each doc in a space, determine access
+    for (const [docId, spaceId] of docSpaceMap) {
+      if (!spaceId) {
+        continue; // Already handled above
+      }
+
+      // Check explicit user role first
+      const explicitRole = userSpaceRoleMap.get(spaceId);
+      if (explicitRole !== undefined && explicitRole !== DocRole.None) {
+        result.set(docId, true);
+        continue;
+      }
+
+      // Check space defaultRole (only applies to workspace members, not external)
+      if (workspaceRole !== null && workspaceRole !== WorkspaceRole.External) {
+        const defaultRole = spaceDefaultRoleMap.get(spaceId) ?? DocRole.None;
+        // If defaultRole is not None, workspace member has access
+        if (defaultRole !== DocRole.None) {
+          result.set(docId, true);
+          continue;
+        }
+      }
+
+      // No access to this space
+      result.set(docId, false);
+    }
+
+    return result;
   }
 
   private async getDocDefaultRoles(

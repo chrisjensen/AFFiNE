@@ -6,6 +6,7 @@ import {
   DateTimeIcon,
   EdgelessIcon,
   FavoriteIcon,
+  FolderIcon,
   HistoryIcon,
   IntegrationsIcon,
   LongerIcon,
@@ -48,6 +49,7 @@ import {
   PageWidthGroupHeader,
 } from './page-width';
 import { SharedFilterValue } from './shared';
+import { SpaceFilterValue } from './space';
 import { TagsDocListProperty, TagsFilterValue, TagsGroupHeader } from './tags';
 import {
   TemplateDocListProperty,
@@ -211,6 +213,18 @@ export const SystemPropertyTypes = {
     },
     filterValue: IntegrationTypeFilterValue,
     defaultFilter: { method: 'is', value: 'readwise' },
+  },
+  space: {
+    icon: FolderIcon,
+    name: 'com.affine.space.space',
+    filterMethod: {
+      is: 'com.affine.editCollection.rules.include.is',
+      'is-not': 'com.affine.editCollection.rules.include.is-not',
+      'is-not-empty': 'com.affine.filter.is not empty',
+      'is-empty': 'com.affine.filter.is empty',
+    },
+    filterValue: SpaceFilterValue,
+    defaultFilter: { method: 'is-not-empty' },
   },
 } as {
   [type: string]: {

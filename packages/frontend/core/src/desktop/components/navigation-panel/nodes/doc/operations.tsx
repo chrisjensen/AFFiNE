@@ -11,9 +11,11 @@ import { useAppSettingHelper } from '@affine/core/components/hooks/affine/use-ap
 import { useBlockSuiteMetaHelper } from '@affine/core/components/hooks/affine/use-block-suite-meta-helper';
 import { useAsyncCallback } from '@affine/core/components/hooks/affine-async-hooks';
 import { IsFavoriteIcon } from '@affine/core/components/pure/icons';
+import { WorkspaceDialogService } from '@affine/core/modules/dialogs';
 import { DocsService } from '@affine/core/modules/doc';
 import { CompatibleFavoriteItemsAdapter } from '@affine/core/modules/favorite';
 import { GuardService } from '@affine/core/modules/permissions';
+import { SpaceService } from '@affine/core/modules/space';
 import { WorkbenchService } from '@affine/core/modules/workbench';
 import { WorkspaceService } from '@affine/core/modules/workspace';
 import { useI18n } from '@affine/i18n';
@@ -21,6 +23,7 @@ import { track } from '@affine/track';
 import {
   DeleteIcon,
   DuplicateIcon,
+  FolderIcon,
   InformationIcon,
   LinkedPageIcon,
   OpenInNewIcon,
@@ -46,22 +49,22 @@ export const useNavigationPanelDocNodeOperations = (
     docsService,
     compatibleFavoriteItemsAdapter,
     guardService,
+    workspaceDialogService,
+    spaceService,
   } = useServices({
     DocsService,
     WorkbenchService,
     WorkspaceService,
     CompatibleFavoriteItemsAdapter,
     GuardService,
+    WorkspaceDialogService,
+    SpaceService,
   });
   const { openConfirmModal } = useConfirmModal();
 
   const [addLinkedPageLoading, setAddLinkedPageLoading] = useState(false);
   const docRecord = useLiveData(docsService.list.doc$(docId));
   const { appSettings } = useAppSettingHelper();
-
-  const { createPage } = usePageHelper(
-    workspaceService.workspace.docCollection
-  );
 
   const favorite = useLiveData(
     useMemo(() => {
@@ -131,7 +134,12 @@ export const useNavigationPanelDocNodeOperations = (
         toast(t['com.affine.no-permission']());
         return;
       }
-      const newDoc = createPage();
+      // Get space ID from parent document
+      const spaceId = spaceService.getSpaceIdForDoc(docId);
+      const newDoc = docsService.createDoc({
+        currentDocId: docId,
+        spaceId: spaceId ?? undefined,
+      });
       // TODO: handle timeout & error
       await docsService.addLinkedDoc(docId, newDoc.id);
       track.$.navigationPanel.docs.createDoc({ control: 'linkDoc' });
@@ -140,7 +148,7 @@ export const useNavigationPanelDocNodeOperations = (
     } finally {
       setAddLinkedPageLoading(false);
     }
-  }, [createPage, guardService, docId, docsService, options, t]);
+  }, [guardService, docId, docsService, options, spaceService, t]);
 
   const handleToggleFavoriteDoc = useCallback(() => {
     compatibleFavoriteItemsAdapter.toggle(docId, 'doc');
@@ -148,6 +156,10 @@ export const useNavigationPanelDocNodeOperations = (
       type: 'doc',
     });
   }, [docId, compatibleFavoriteItemsAdapter]);
+
+  const handleMoveToSpace = useCallback(() => {
+    workspaceDialogService.open('move-to-space', { docId });
+  }, [workspaceDialogService, docId]);
 
   return useMemo(
     () => [
@@ -243,6 +255,22 @@ export const useNavigationPanelDocNodeOperations = (
         ),
       },
       {
+        index: 200,
+        view: (
+          <Guard docId={docId} permission="Doc_Update">
+            {canEdit => (
+              <MenuItem
+                prefixIcon={<FolderIcon />}
+                onClick={handleMoveToSpace}
+                disabled={!canEdit}
+              >
+                {t['com.affine.space.moveToSpace']?.() || 'Move to Space...'}
+              </MenuItem>
+            )}
+          </Guard>
+        ),
+      },
+      {
         index: 9999,
         view: <MenuSeparator key="menu-separator" />,
       },
@@ -271,6 +299,7 @@ export const useNavigationPanelDocNodeOperations = (
       favorite,
       handleAddLinkedPage,
       handleDuplicate,
+      handleMoveToSpace,
       handleMoveToTrash,
       handleOpenInNewTab,
       handleOpenInSplitView,

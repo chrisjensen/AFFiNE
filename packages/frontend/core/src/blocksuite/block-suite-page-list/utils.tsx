@@ -2,22 +2,33 @@ import { toast } from '@affine/component';
 import { getStoreManager } from '@affine/core/blocksuite/manager/store';
 import { AppSidebarService } from '@affine/core/modules/app-sidebar';
 import { DocsService } from '@affine/core/modules/doc';
+import { GlobalContextService } from '@affine/core/modules/global-context';
+import { SpaceService } from '@affine/core/modules/space';
 import { WorkbenchService } from '@affine/core/modules/workbench';
 import { getAFFiNEWorkspaceSchema } from '@affine/core/modules/workspace';
 import { type DocMode } from '@blocksuite/affine/model';
 import type { Workspace } from '@blocksuite/affine/store';
-import { useServices } from '@toeverything/infra';
+import { useLiveData, useServices } from '@toeverything/infra';
 import { useCallback, useMemo } from 'react';
 
 export const usePageHelper = (docCollection: Workspace) => {
-  const { docsService, workbenchService, appSidebarService } = useServices({
+  const {
+    docsService,
+    workbenchService,
+    appSidebarService,
+    globalContextService,
+    spaceService,
+  } = useServices({
     DocsService,
     WorkbenchService,
     AppSidebarService,
+    GlobalContextService,
+    SpaceService,
   });
   const workbench = workbenchService.workbench;
   const docRecordList = docsService.list;
   const appSidebar = appSidebarService.sidebar;
+  const currentDocId = useLiveData(globalContextService.globalContext.docId.$);
 
   const createPageAndOpen = useCallback(
     (
@@ -31,7 +42,14 @@ export const usePageHelper = (docCollection: Workspace) => {
       }
     ) => {
       appSidebar.setHovering(false);
-      const page = docsService.createDoc();
+      // Get space ID from current document if available
+      const spaceId = currentDocId
+        ? spaceService.getSpaceIdForDoc(currentDocId)
+        : null;
+      const page = docsService.createDoc({
+        currentDocId: currentDocId ?? undefined,
+        spaceId: spaceId ?? undefined,
+      });
 
       if (mode) {
         docRecordList.doc$(page.id).value?.setPrimaryMode(mode);
@@ -45,7 +63,14 @@ export const usePageHelper = (docCollection: Workspace) => {
       }
       return page;
     },
-    [appSidebar, docRecordList, docsService, workbench]
+    [
+      appSidebar,
+      currentDocId,
+      docRecordList,
+      docsService,
+      spaceService,
+      workbench,
+    ]
   );
 
   const createEdgelessAndOpen = useCallback(

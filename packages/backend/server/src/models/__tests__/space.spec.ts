@@ -278,7 +278,7 @@ test('should move doc to different space', async t => {
 
   const docId = 'test-doc-to-move';
   await models.spaceDoc.add(space1.id, docId);
-  await models.spaceDoc.moveDoc(docId, space2.id);
+  await models.spaceDoc.moveDoc(workspace.id, docId, space2.id);
 
   const newSpaceId = await models.spaceDoc.getSpaceId(docId);
   t.is(newSpaceId, space2.id);
@@ -297,7 +297,7 @@ test('should move doc to workspace root (null space)', async t => {
 
   const docId = 'test-doc-to-root';
   await models.spaceDoc.add(space.id, docId);
-  await models.spaceDoc.moveDoc(docId, null);
+  await models.spaceDoc.moveDoc(workspace.id, docId, null);
 
   const spaceId = await models.spaceDoc.getSpaceId(docId);
   t.is(spaceId, null);

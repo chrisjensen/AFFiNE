@@ -73,9 +73,13 @@ export const PromptModal = ({
         } else {
           e.currentTarget.blur();
         }
+      } else if (e.key === 'Enter' && (!required || value)) {
+        // Submit on Enter if not required or has value
+        e.preventDefault();
+        onConfirmClick();
       }
     },
-    [value]
+    [value, required, onConfirmClick]
   );
 
   return (

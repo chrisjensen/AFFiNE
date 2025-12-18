@@ -44,9 +44,10 @@ export class DocModel extends BaseModel {
 
   // #region Update
 
-  private updateToDocRecord(row: Update): Doc {
+  private updateToDocRecord(row: Update & { spaceId?: string | null }): Doc {
     return {
       spaceId: row.workspaceId,
+      containerSpaceId: row.spaceId || undefined,
       docId: row.id,
       blob: row.blob,
       timestamp: row.createdAt.getTime(),
@@ -54,9 +55,10 @@ export class DocModel extends BaseModel {
     };
   }
 
-  private docRecordToUpdate(record: Doc): Update {
+  private docRecordToUpdate(record: Doc): Update & { spaceId: string | null } {
     return {
       workspaceId: record.spaceId,
+      spaceId: record.containerSpaceId || null,
       id: record.docId,
       blob: record.blob,
       createdAt: new Date(record.timestamp),
@@ -147,7 +149,7 @@ export class DocModel extends BaseModel {
    * insert or update a doc.
    */
   async upsert(doc: Doc) {
-    const { spaceId, docId, blob, timestamp, editorId } = doc;
+    const { spaceId, containerSpaceId, docId, blob, timestamp, editorId } = doc;
     const updatedAt = new Date(timestamp);
     // CONCERNS:
     //   i. Because we save the real user's last seen action time as `updatedAt`,
@@ -158,10 +160,10 @@ export class DocModel extends BaseModel {
     //      where: { workspaceId_id: {}, updatedAt: { lt: updatedAt } }
     //                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     const result: { updatedAt: Date }[] = await this.db.$queryRaw`
-      INSERT INTO "snapshots" ("workspace_id", "guid", "blob", "created_at", "updated_at", "created_by", "updated_by")
-      VALUES (${spaceId}, ${docId}, ${blob}, DEFAULT, ${updatedAt}, ${editorId}, ${editorId})
+      INSERT INTO "snapshots" ("workspace_id", "space_id", "guid", "blob", "created_at", "updated_at", "created_by", "updated_by")
+      VALUES (${spaceId}, ${containerSpaceId ?? null}, ${docId}, ${blob}, DEFAULT, ${updatedAt}, ${editorId}, ${editorId})
       ON CONFLICT ("workspace_id", "guid")
-      DO UPDATE SET "blob" = ${blob}, "updated_at" = ${updatedAt}, "updated_by" = ${editorId}
+      DO UPDATE SET "blob" = ${blob}, "updated_at" = ${updatedAt}, "updated_by" = ${editorId}, "space_id" = ${containerSpaceId ?? null}
       WHERE "snapshots"."workspace_id" = ${spaceId} AND "snapshots"."guid" = ${docId} AND "snapshots"."updated_at" <= ${updatedAt}
       RETURNING "snapshots"."workspace_id" as "workspaceId", "snapshots"."guid" as "id", "snapshots"."updated_at" as "updatedAt"
     `;
@@ -176,12 +178,22 @@ export class DocModel extends BaseModel {
    * Get a doc by workspaceId and docId.
    */
   async get(workspaceId: string, docId: string): Promise<Doc | null> {
-    const row = await this.getSnapshot(workspaceId, docId);
+    const row = await this.getSnapshot(workspaceId, docId, {
+      select: {
+        workspaceId: true,
+        spaceId: true,
+        id: true,
+        blob: true,
+        updatedAt: true,
+        updatedBy: true,
+      },
+    });
     if (!row) {
       return null;
     }
     return {
       spaceId: row.workspaceId,
+      containerSpaceId: row.spaceId || undefined,
       docId: row.id,
       blob: row.blob,
       timestamp: row.updatedAt.getTime(),
@@ -336,12 +348,103 @@ export class DocModel extends BaseModel {
     });
 
     updates.forEach(u => {
-      if (u._max.createdAt) {
+      if (u._max?.createdAt) {
         result[u.id] = u._max.createdAt.getTime();
       }
     });
 
     return result;
+  }
+
+  /**
+   * Find the timestamps of docs in a specific space (container).
+   *
+   * @param workspaceId The workspace ID.
+   * @param containerSpaceId The containing space ID.
+   * @param after Only return timestamps after this timestamp.
+   */
+  async findTimestampsByContainerSpaceId(
+    workspaceId: string,
+    containerSpaceId: string,
+    after?: number
+  ) {
+    const snapshots = await this.db.snapshot.findMany({
+      select: {
+        id: true,
+        updatedAt: true,
+      },
+      where: {
+        workspaceId,
+        spaceId: containerSpaceId,
+        ...(after
+          ? {
+              updatedAt: {
+                gt: new Date(after),
+              },
+            }
+          : {}),
+      },
+    });
+
+    const updates = await this.db.update.groupBy({
+      where: {
+        workspaceId,
+        spaceId: containerSpaceId,
+        ...(after
+          ? {
+              createdAt: {
+                gt: new Date(after),
+              },
+            }
+          : {}),
+      },
+      by: ['id'],
+      _max: {
+        createdAt: true,
+      },
+    });
+
+    const result: Record<string, number> = {};
+
+    snapshots.forEach(s => {
+      result[s.id] = s.updatedAt.getTime();
+    });
+
+    updates.forEach(u => {
+      if (u._max?.createdAt) {
+        result[u.id] = u._max.createdAt.getTime();
+      }
+    });
+
+    return result;
+  }
+
+  /**
+   * Move a doc to a different space (container).
+   * Updates the space_id in snapshots, updates, and snapshot_histories.
+   */
+  @Transactional()
+  async moveToSpace(
+    workspaceId: string,
+    docId: string,
+    targetContainerSpaceId: string | null
+  ) {
+    await this.db.snapshot.updateMany({
+      where: { workspaceId, id: docId },
+      data: { spaceId: targetContainerSpaceId },
+    });
+    await this.db.update.updateMany({
+      where: { workspaceId, id: docId },
+      data: { spaceId: targetContainerSpaceId },
+    });
+    await this.db.snapshotHistory.updateMany({
+      where: { workspaceId, id: docId },
+      data: { spaceId: targetContainerSpaceId },
+    });
+
+    this.logger.log(
+      `Moved doc ${docId} to space ${targetContainerSpaceId ?? 'workspace root'} in workspace ${workspaceId}`
+    );
   }
 
   // #endregion

@@ -16,6 +16,7 @@ import { EnableCloudDialog } from './enable-cloud';
 import { ImportDialog } from './import';
 import { ImportTemplateDialog } from './import-template';
 import { ImportWorkspaceDialog } from './import-workspace';
+import { MoveToSpaceDialog } from './move-to-space';
 import { CollectionSelectorDialog } from './selectors/collection';
 import { DateSelectorDialog } from './selectors/date';
 import { DocSelectorDialog } from './selectors/doc';
@@ -48,6 +49,7 @@ const WORKSPACE_DIALOGS = {
   'collection-selector': CollectionSelectorDialog,
   'date-selector': DateSelectorDialog,
   'space-setting': SpaceSettingDialog,
+  'move-to-space': MoveToSpaceDialog,
   setting: SettingDialog,
   import: ImportDialog,
 } satisfies {

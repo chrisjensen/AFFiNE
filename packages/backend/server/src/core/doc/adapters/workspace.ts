@@ -149,6 +149,22 @@ export class PgWorkspaceDocStorageAdapter extends DocStorageAdapter {
     );
   }
 
+  /**
+   * Get doc timestamps for a specific space container.
+   * Used for syncing only docs within a space.
+   */
+  async getContainerSpaceDocTimestamps(
+    workspaceId: string,
+    containerSpaceId: string,
+    after?: number
+  ) {
+    return await this.models.doc.findTimestampsByContainerSpaceId(
+      workspaceId,
+      containerSpaceId,
+      after
+    );
+  }
+
   protected async markUpdatesMerged(
     workspaceId: string,
     docId: string,

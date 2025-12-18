@@ -65,6 +65,9 @@ export class SpaceType implements Partial<Space> {
   @Field(() => String, { nullable: true })
   avatarKey?: string | null;
 
+  @Field(() => String, { nullable: true })
+  icon?: string | null;
+
   @Field(() => Int)
   defaultRole!: number;
 
@@ -101,6 +104,9 @@ class CreateSpaceInput {
   @Field(() => String, { nullable: true })
   description?: string;
 
+  @Field(() => String, { nullable: true })
+  icon?: string;
+
   @Field(() => DocRole, { nullable: true })
   defaultRole?: DocRole;
 }
@@ -112,6 +118,9 @@ class UpdateSpaceInput {
 
   @Field(() => String, { nullable: true })
   description?: string;
+
+  @Field(() => String, { nullable: true })
+  icon?: string;
 
   @Field(() => DocRole, { nullable: true })
   defaultRole?: DocRole;
@@ -248,6 +257,49 @@ export class WorkspaceSpaceResolver {
 
     return space;
   }
+
+  @ResolveField(() => [String], {
+    description:
+      'Get doc IDs that are hidden from the user (in inaccessible spaces)',
+  })
+  async hiddenDocIds(
+    @CurrentUser() user: CurrentUser,
+    @Parent() workspace: WorkspaceType
+  ): Promise<string[]> {
+    // Check workspace access first
+    await this.ac
+      .user(user.id)
+      .workspace(workspace.id)
+      .assert('Workspace.Read');
+
+    // Get all spaces in the workspace
+    const allSpaces = await this.models.space.listByWorkspace(workspace.id);
+
+    // Find inaccessible spaces
+    const inaccessibleSpaceIds: string[] = [];
+    for (const space of allSpaces) {
+      const canRead = await this.ac
+        .user(user.id)
+        .space(workspace.id, space.id)
+        .can('Space.Read');
+      if (!canRead) {
+        inaccessibleSpaceIds.push(space.id);
+      }
+    }
+
+    if (inaccessibleSpaceIds.length === 0) {
+      return [];
+    }
+
+    // Get all doc IDs from inaccessible spaces
+    const hiddenDocIds: string[] = [];
+    for (const spaceId of inaccessibleSpaceIds) {
+      const docIds = await this.models.spaceDoc.getDocIds(spaceId);
+      hiddenDocIds.push(...docIds);
+    }
+
+    return hiddenDocIds;
+  }
 }
 
 /**
@@ -341,14 +393,32 @@ export class SpaceResolver {
   @ResolveField(() => Int, {
     description: 'Number of docs in this space',
   })
-  async docCount(@Parent() space: SpaceType): Promise<number> {
+  async docCount(
+    @CurrentUser() user: CurrentUser,
+    @Parent() space: SpaceType
+  ): Promise<number> {
+    // Defense-in-depth: verify user has space read access
+    await this.ac
+      .user(user.id)
+      .space(space.workspaceId, space.id)
+      .assert('Space.Read');
+
     return this.models.spaceDoc.count(space.id);
   }
 
   @ResolveField(() => [String], {
     description: 'IDs of docs in this space',
   })
-  async docIds(@Parent() space: SpaceType): Promise<string[]> {
+  async docIds(
+    @CurrentUser() user: CurrentUser,
+    @Parent() space: SpaceType
+  ): Promise<string[]> {
+    // Defense-in-depth: verify user has space read access
+    await this.ac
+      .user(user.id)
+      .space(space.workspaceId, space.id)
+      .assert('Space.Read');
+
     return this.models.spaceDoc.getDocIds(space.id);
   }
 
@@ -422,6 +492,7 @@ export class SpaceResolver {
     const updated = await this.models.space.update(spaceId, {
       name: input.name ?? undefined,
       description: input.description ?? undefined,
+      icon: input.icon ?? undefined,
       defaultRole: input.defaultRole ?? undefined,
     });
 
@@ -554,7 +625,11 @@ export class SpaceResolver {
         .assert('Space.CreateDoc');
     }
 
-    await this.models.spaceDoc.moveDoc(input.docId, input.spaceId ?? null);
+    await this.models.spaceDoc.moveDoc(
+      input.workspaceId,
+      input.docId,
+      input.spaceId ?? null
+    );
 
     this.logger.log(
       `Moved doc [${input.docId}] to ${input.spaceId ? `space [${input.spaceId}]` : 'workspace root'}`

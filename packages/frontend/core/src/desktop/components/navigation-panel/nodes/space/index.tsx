@@ -4,21 +4,29 @@ import {
   MenuItem,
   toast,
 } from '@affine/component';
+import {
+  type IconData,
+  IconRenderer,
+  IconType,
+} from '@affine/component/ui/icon-picker';
 import { SpaceDeleteModal } from '@affine/core/desktop/dialogs/space-setting/delete-space-modal';
 import { WorkspaceDialogService } from '@affine/core/modules/dialogs';
+import { DocsService } from '@affine/core/modules/doc';
 import { GlobalContextService } from '@affine/core/modules/global-context';
 import { NavigationPanelService } from '@affine/core/modules/navigation-panel';
 import { type Space, SpaceService } from '@affine/core/modules/space';
+import { WorkbenchService } from '@affine/core/modules/workbench';
 import type { AffineDNDData } from '@affine/core/types/dnd';
 import { useI18n } from '@affine/i18n';
 import { track } from '@affine/track';
 import {
   DeleteIcon,
-  EditIcon,
   FolderIcon,
+  PlusIcon,
   SettingsIcon,
 } from '@blocksuite/icons/rc';
 import { useLiveData, useService, useServices } from '@toeverything/infra';
+import { nanoid } from 'nanoid';
 import { useCallback, useMemo, useState } from 'react';
 
 import {
@@ -30,7 +38,7 @@ import { NavigationPanelDocNode } from '../doc';
 import type { GenericNavigationPanelNode } from '../types';
 import { Empty } from './empty';
 
-const SpaceIcon: NavigationPanelTreeNodeIcon = ({
+const DefaultSpaceIcon: NavigationPanelTreeNodeIcon = ({
   className,
   draggedOver,
   treeInstruction,
@@ -40,6 +48,59 @@ const SpaceIcon: NavigationPanelTreeNodeIcon = ({
     data-dragged-over={!!draggedOver && treeInstruction?.type === 'make-child'}
   />
 );
+
+// Helper to parse icon string to IconData for rendering
+function parseIconData(icon: string | null | undefined): IconData | null {
+  if (!icon) return null;
+  // Try to parse as JSON (AffineIcon format)
+  if (icon.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(icon);
+      if (parsed.type === 'affine-icon') {
+        return {
+          type: IconType.AffineIcon,
+          name: parsed.name,
+          color: parsed.color,
+        };
+      }
+    } catch {
+      // Not valid JSON, treat as emoji
+    }
+  }
+  // Treat as emoji unicode
+  return { type: IconType.Emoji, unicode: icon };
+}
+
+// Create a custom icon component that shows the space's icon or falls back to folder
+const createSpaceIconComponent = (
+  icon: string | null | undefined
+): NavigationPanelTreeNodeIcon => {
+  if (!icon) {
+    return DefaultSpaceIcon;
+  }
+
+  const iconData = parseIconData(icon);
+  if (!iconData) {
+    return DefaultSpaceIcon;
+  }
+
+  // Return a component that renders the icon
+  const CustomSpaceIcon: NavigationPanelTreeNodeIcon = ({ className }) => (
+    <span
+      className={className}
+      style={{
+        fontSize: '1em',
+        lineHeight: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <IconRenderer data={iconData} />
+    </span>
+  );
+  return CustomSpaceIcon;
+};
 
 export const NavigationPanelSpaceNode = ({
   spaceId,
@@ -54,12 +115,19 @@ export const NavigationPanelSpaceNode = ({
   spaceId: string;
 } & GenericNavigationPanelNode) => {
   const t = useI18n();
-  const { globalContextService, spaceService, workspaceDialogService } =
-    useServices({
-      GlobalContextService,
-      SpaceService,
-      WorkspaceDialogService,
-    });
+  const {
+    globalContextService,
+    spaceService,
+    workspaceDialogService,
+    docsService,
+    workbenchService,
+  } = useServices({
+    GlobalContextService,
+    SpaceService,
+    WorkspaceDialogService,
+    DocsService,
+    WorkbenchService,
+  });
   const navigationPanelService = useService(NavigationPanelService);
 
   const active =
@@ -80,7 +148,14 @@ export const NavigationPanelSpaceNode = ({
 
   const space = useLiveData(spaceService.space$(spaceId));
   const name = useLiveData(space?.name$);
+  const icon = useLiveData(space?.icon$);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  // Create the icon component based on the space's custom icon
+  const SpaceIconComponent = useMemo(
+    () => createSpaceIconComponent(icon),
+    [icon]
+  );
 
   const dndData = useMemo(() => {
     return {
@@ -165,10 +240,6 @@ export const NavigationPanelSpaceNode = ({
     [space, handleMoveDocToSpace]
   );
 
-  const handleOpenCollapsed = useCallback(() => {
-    setCollapsed(false);
-  }, [setCollapsed]);
-
   const handleDelete = useCallback(() => {
     if (!space) {
       return;
@@ -189,17 +260,36 @@ export const NavigationPanelSpaceNode = ({
     workspaceDialogService.open('space-setting', { spaceId });
   }, [workspaceDialogService, spaceId]);
 
+  const handleCreateNewDoc = useCallback(() => {
+    if (!space) {
+      return;
+    }
+    const newDocId = nanoid();
+    // Create doc with spaceId - middleware will handle space assignment
+    docsService.createDoc({
+      id: newDocId,
+      primaryMode: 'page',
+      spaceId: space.id,
+    });
+    workbenchService.workbench.openDoc(newDocId);
+    setCollapsed(false);
+    track.$.navigationPanel.organize.createOrganizeItem({
+      type: 'doc',
+      control: 'button',
+    });
+  }, [space, docsService, workbenchService, setCollapsed]);
+
   const spaceOperations = useMemo(() => {
     return [
       {
         index: 0,
         view: (
           <MenuItem
-            prefixIcon={<EditIcon />}
-            onClick={handleOpenCollapsed}
-            data-testid="space-option-rename"
+            prefixIcon={<PlusIcon />}
+            onClick={handleCreateNewDoc}
+            data-testid="space-option-new-doc"
           >
-            {t['Rename']()}
+            {t['com.affine.space.newDoc']()}
           </MenuItem>
         ),
       },
@@ -229,7 +319,7 @@ export const NavigationPanelSpaceNode = ({
         ),
       },
     ];
-  }, [handleOpenCollapsed, handleOpenSettings, handleDelete, t]);
+  }, [handleCreateNewDoc, handleOpenSettings, handleDelete, t]);
 
   const finalOperations = useMemo(() => {
     if (additionalOperations) {
@@ -255,7 +345,7 @@ export const NavigationPanelSpaceNode = ({
   return (
     <>
       <NavigationPanelTreeNode
-        icon={SpaceIcon}
+        icon={SpaceIconComponent}
         name={name || t['Untitled']()}
         dndData={dndData}
         onDrop={handleDropOnSpace}

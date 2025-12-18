@@ -1,11 +1,12 @@
 import { cssVar } from '@toeverything/theme';
-import { globalStyle, style } from '@vanilla-extract/css';
+import { style } from '@vanilla-extract/css';
 
 export const container = style({
   display: 'flex',
   flexDirection: 'column',
   gap: 24,
   padding: 24,
+  maxHeight: 'calc(100vh - 120px)',
 });
 
 export const header = style({
@@ -24,6 +25,17 @@ export const section = style({
   display: 'flex',
   flexDirection: 'column',
   gap: 12,
+  flex: 1,
+  minHeight: 0,
+});
+
+export const sectionContent = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 12,
+  flex: 1,
+  overflowY: 'auto',
+  minHeight: 0,
 });
 
 export const sectionTitle = style({
@@ -52,11 +64,23 @@ export const textarea = style({
   width: '100%',
   minHeight: 80,
   resize: 'vertical',
-});
-
-// Ensure text starts at top of textarea
-globalStyle(`${textarea} textarea, ${textarea} input`, {
+  padding: '8px 12px',
+  fontSize: cssVar('fontSm'),
+  lineHeight: '22px',
+  color: cssVar('textPrimaryColor'),
+  backgroundColor: cssVar('backgroundPrimaryColor'),
+  border: `1px solid ${cssVar('borderColor')}`,
+  borderRadius: 8,
+  outline: 'none',
+  fontFamily: 'inherit',
   verticalAlign: 'top',
+  '::placeholder': {
+    color: cssVar('placeholderColor'),
+  },
+  ':focus': {
+    borderColor: cssVar('primaryColor'),
+    boxShadow: `0 0 0 2px ${cssVar('primaryColor')}20`,
+  },
 });
 
 export const roleSelector = style({
@@ -110,6 +134,8 @@ export const footer = style({
   gap: 12,
   paddingTop: 12,
   borderTop: `1px solid ${cssVar('borderColor')}`,
+  flexShrink: 0,
+  marginTop: 'auto',
 });
 
 export const dangerZone = style({
@@ -242,9 +268,129 @@ export const radioInput = style({
   height: 16,
   minWidth: 16,
   minHeight: 16,
+  maxWidth: 16,
   accentColor: cssVar('primaryColor'),
   cursor: 'pointer',
-  flexShrink: 0,
+  flex: '0 0 16px',
   margin: 0,
   appearance: 'auto',
+});
+
+export const sectionHeader = style({
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 16,
+});
+
+export const loadingContainer = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 24,
+});
+
+export const emptyState = style({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 24,
+  textAlign: 'center',
+  gap: 8,
+});
+
+export const emptyStateTitle = style({
+  fontSize: cssVar('fontSm'),
+  fontWeight: 500,
+  color: cssVar('textPrimaryColor'),
+});
+
+export const emptyStateDescription = style({
+  fontSize: cssVar('fontXs'),
+  color: cssVar('textSecondaryColor'),
+  maxWidth: 300,
+});
+
+export const loadMoreButton = style({
+  width: '100%',
+  marginTop: 8,
+});
+
+export const iconNameRow = style({
+  display: 'flex',
+  gap: 12,
+  alignItems: 'flex-start',
+});
+
+export const iconPickerWrapper = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 8,
+});
+
+export const iconPickerButton = style({
+  width: 48,
+  height: 48,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: 8,
+  border: `1px solid ${cssVar('borderColor')}`,
+  backgroundColor: cssVar('backgroundSecondaryColor'),
+  cursor: 'pointer',
+  fontSize: 24,
+  transition: 'all 0.2s ease',
+  ':hover': {
+    borderColor: cssVar('primaryColor'),
+    backgroundColor: cssVar('hoverColor'),
+  },
+});
+
+export const iconPlaceholder = style({
+  color: cssVar('placeholderColor'),
+  fontSize: 20,
+});
+
+export const nameInputWrapper = style({
+  flex: 1,
+});
+
+export const dropdownTrigger = style({
+  width: '100%',
+  padding: '8px 12px',
+  borderRadius: 8,
+  border: `1px solid ${cssVar('borderColor')}`,
+  backgroundColor: cssVar('backgroundPrimaryColor'),
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  transition: 'all 0.2s ease',
+  selectors: {
+    '&:hover': {
+      borderColor: cssVar('primaryColor'),
+      backgroundColor: cssVar('hoverColor'),
+    },
+    '&:focus-visible': {
+      borderColor: cssVar('primaryColor'),
+      boxShadow: `0 0 0 2px ${cssVar('primaryColor')}20`,
+      outline: 'none',
+    },
+  },
+});
+
+export const dropdownContent = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 2,
+  width: '100%',
+  textAlign: 'left',
+  flex: 1,
+  minWidth: 0,
+});
+
+export const roleMenuItem = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 2,
+  padding: '4px 0',
 });

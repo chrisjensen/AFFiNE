@@ -1,27 +1,45 @@
-import { Button, Input, Modal } from '@affine/component';
+import {
+  Button,
+  Input,
+  Loading,
+  Menu,
+  MenuItem,
+  MenuTrigger,
+  Modal,
+} from '@affine/component';
+import {
+  type IconData,
+  IconPicker,
+  IconRenderer,
+  IconType,
+} from '@affine/component/ui/icon-picker';
 import type { DialogComponentProps } from '@affine/core/modules/dialogs';
 import type { WORKSPACE_DIALOG_SCHEMA } from '@affine/core/modules/dialogs/constant';
-import { type Space, SpaceService } from '@affine/core/modules/space';
+import { WorkspacePermissionService } from '@affine/core/modules/permissions';
+import {
+  type Space,
+  SpaceMembersService,
+  SpaceService,
+} from '@affine/core/modules/space';
 import { DocRole } from '@affine/core/modules/space/stores/space';
 import { useI18n } from '@affine/i18n';
+import { FolderIcon } from '@blocksuite/icons/rc';
 import { useLiveData, useService } from '@toeverything/infra';
-import { useCallback, useState } from 'react';
+import { useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { SpaceDeleteModal } from './delete-space-modal';
+import { SpaceMemberItem } from './member-item';
+import { SpaceMemberPicker } from './member-picker';
 import * as styles from './style.css';
 
-type TabType = 'general' | 'members' | 'danger';
+type TabType = 'general' | 'access' | 'danger';
 
 const ROLE_OPTIONS = [
   {
-    value: DocRole.Reader,
-    label: 'Reader',
-    description: 'Can view documents in this space',
-  },
-  {
-    value: DocRole.Commenter,
-    label: 'Commenter',
-    description: 'Can view and comment on documents',
+    value: DocRole.Manager,
+    label: 'Manager',
+    description: 'Can manage space settings and members',
   },
   {
     value: DocRole.Editor,
@@ -29,7 +47,17 @@ const ROLE_OPTIONS = [
     description: 'Can view, comment, and edit documents',
   },
   {
-    value: DocRole.External,
+    value: DocRole.Commenter,
+    label: 'Commenter',
+    description: 'Can view and comment on documents',
+  },
+  {
+    value: DocRole.Reader,
+    label: 'Reader',
+    description: 'Can view documents in this space',
+  },
+  {
+    value: DocRole.None,
     label: 'No Access',
     description: 'Must be explicitly invited to access',
   },
@@ -46,19 +74,72 @@ const GeneralTab = ({
 
   const currentName = useLiveData(space.name$);
   const currentDescription = useLiveData(space.description$);
+  const currentIcon = useLiveData(space.icon$);
   const currentDefaultRole = useLiveData(space.defaultRole$);
 
   const [name, setName] = useState(currentName || '');
   const [description, setDescription] = useState(currentDescription || '');
-  const [defaultRole, setDefaultRole] = useState<DocRole>(
-    currentDefaultRole ?? DocRole.Reader
-  );
+  const [icon, setIcon] = useState<string | null>(currentIcon ?? null);
   const [isSaving, setIsSaving] = useState(false);
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
+
+  // Track if state has been initialized from LiveData
+  const hasInitialized = useRef(false);
+  useEffect(() => {
+    // Only sync once when LiveData values become available
+    if (!hasInitialized.current && currentName !== undefined) {
+      hasInitialized.current = true;
+      setName(currentName || '');
+      setDescription(currentDescription || '');
+      setIcon(currentIcon ?? null);
+    }
+  }, [currentName, currentDescription, currentIcon]);
 
   const hasChanges =
     name !== currentName ||
     description !== (currentDescription || '') ||
-    defaultRole !== currentDefaultRole;
+    (icon ?? null) !== (currentIcon ?? null);
+
+  const handleIconSelect = useCallback((data?: IconData) => {
+    if (!data) {
+      setIcon(null);
+    } else if (data.type === IconType.Emoji) {
+      setIcon(data.unicode);
+    } else if (data.type === IconType.AffineIcon) {
+      // Store AffineIcon as a JSON string for the backend
+      setIcon(
+        JSON.stringify({
+          type: 'affine-icon',
+          name: data.name,
+          color: data.color,
+        })
+      );
+    }
+    // Note: IconType.Blob requires upload infrastructure, not supported for spaces yet
+    setIconPickerOpen(false);
+  }, []);
+
+  // Parse icon string to IconData for rendering
+  const iconData = useMemo((): IconData | null => {
+    if (!icon) return null;
+    // Try to parse as JSON (AffineIcon format)
+    if (icon.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(icon);
+        if (parsed.type === 'affine-icon') {
+          return {
+            type: IconType.AffineIcon,
+            name: parsed.name,
+            color: parsed.color,
+          };
+        }
+      } catch {
+        // Not valid JSON, treat as emoji
+      }
+    }
+    // Treat as emoji unicode
+    return { type: IconType.Emoji, unicode: icon };
+  }, [icon]);
 
   const handleSave = useCallback(async () => {
     if (!hasChanges) return;
@@ -71,8 +152,8 @@ const GeneralTab = ({
       if (description !== (currentDescription || '')) {
         await space.updateDescription(description);
       }
-      if (defaultRole !== currentDefaultRole) {
-        await space.updateDefaultRole(defaultRole);
+      if (icon !== currentIcon) {
+        await space.updateIcon(icon);
       }
       onClose();
     } catch (error) {
@@ -86,73 +167,82 @@ const GeneralTab = ({
     currentName,
     description,
     currentDescription,
-    defaultRole,
-    currentDefaultRole,
+    icon,
+    currentIcon,
     space,
     onClose,
   ]);
 
   return (
     <div className={styles.section}>
-      <div className={styles.inputWrapper}>
-        <label className={styles.label}>
-          {t['com.affine.space.name']?.() || 'Space Name'}
-        </label>
-        <Input
-          className={styles.input}
-          value={name}
-          onChange={setName}
-          placeholder={
-            t['com.affine.space.name.placeholder']?.() || 'Enter space name'
-          }
-          data-testid="space-name-input"
-        />
-      </div>
-
-      <div className={styles.inputWrapper}>
-        <label className={styles.label}>
-          {t['com.affine.space.description']?.() || 'Description'}
-        </label>
-        <Input
-          className={styles.textarea}
-          value={description}
-          onChange={setDescription}
-          placeholder={
-            t['com.affine.space.description.placeholder']?.() ||
-            'Enter space description (optional)'
-          }
-          data-testid="space-description-input"
-        />
-      </div>
-
-      <div className={styles.inputWrapper}>
-        <label className={styles.label}>
-          {t['com.affine.space.defaultRole']?.() ||
-            'Default Role for Workspace Members'}
-        </label>
-        <div className={styles.roleSelector}>
-          {ROLE_OPTIONS.map(option => (
-            <div
-              key={option.value}
-              className={styles.roleOption}
-              data-selected={defaultRole === option.value}
-              onClick={() => setDefaultRole(option.value)}
+      <div className={styles.sectionContent}>
+        <div className={styles.inputWrapper}>
+          <label className={styles.label}>
+            {t['com.affine.space.name']?.() || 'Space Name'}
+          </label>
+          <div className={styles.iconNameRow}>
+            <Menu
+              rootOptions={{
+                open: iconPickerOpen,
+                onOpenChange: setIconPickerOpen,
+              }}
+              contentOptions={{
+                side: 'bottom',
+                align: 'start',
+                sideOffset: 8,
+              }}
+              items={
+                <div onWheel={e => e.stopPropagation()}>
+                  <IconPicker onSelect={handleIconSelect} />
+                </div>
+              }
             >
-              <input
-                type="radio"
-                name="defaultRole"
-                className={styles.radioInput}
-                checked={defaultRole === option.value}
-                onChange={() => setDefaultRole(option.value)}
+              <button
+                className={styles.iconPickerButton}
+                aria-label={
+                  t['com.affine.space.icon.select']?.() || 'Select space icon'
+                }
+                title={
+                  t['com.affine.space.icon.select']?.() || 'Select space icon'
+                }
+              >
+                {iconData ? (
+                  <IconRenderer data={iconData} />
+                ) : (
+                  <FolderIcon className={styles.iconPlaceholder} />
+                )}
+              </button>
+            </Menu>
+            <div className={styles.nameInputWrapper}>
+              <Input
+                className={styles.input}
+                value={name}
+                onChange={setName}
+                placeholder={
+                  t['com.affine.space.name.placeholder']?.() ||
+                  'Enter space name'
+                }
+                data-testid="space-name-input"
               />
-              <div className={styles.roleInfo}>
-                <span className={styles.roleName}>{option.label}</span>
-                <span className={styles.roleDescription}>
-                  {option.description}
-                </span>
-              </div>
             </div>
-          ))}
+          </div>
+        </div>
+
+        <div className={styles.inputWrapper}>
+          <label className={styles.label}>
+            {t['com.affine.space.description']?.() || 'Description'}
+          </label>
+          <textarea
+            className={styles.textarea}
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            placeholder={
+              t['com.affine.space.description.placeholder']?.() ||
+              'Enter space description (optional)'
+            }
+            data-testid="space-description-input"
+            rows={3}
+          />
         </div>
       </div>
 
@@ -174,27 +264,164 @@ const GeneralTab = ({
   );
 };
 
-const MembersTab = ({ space: _space }: { space: Space }) => {
+const AccessTab = ({ space }: { space: Space }) => {
   const t = useI18n();
-  // space parameter reserved for future member management implementation
+  const spaceMembersService = useService(SpaceMembersService);
+  const workspacePermissionService = useService(WorkspacePermissionService);
+  const [showAddMember, setShowAddMember] = useState(false);
 
-  // For now, show a placeholder since member management
-  // requires additional API integration
+  const members = useLiveData(spaceMembersService.members$);
+  const memberCount = useLiveData(spaceMembersService.memberCount$);
+  const isLoading = useLiveData(spaceMembersService.isLoading$);
+  const hasMore = useLiveData(spaceMembersService.hasMore$);
+  const currentDefaultRole = useLiveData(space.defaultRole$);
+
+  const isWorkspaceOwner = useLiveData(
+    workspacePermissionService.permission.isOwner$
+  );
+  const isWorkspaceAdmin = useLiveData(
+    workspacePermissionService.permission.isAdmin$
+  );
+
+  // Determine user permissions - workspace owners/admins can manage space members
+  const canManageUsers = Boolean(isWorkspaceOwner || isWorkspaceAdmin);
+  const canTransferOwner = Boolean(isWorkspaceOwner);
+
+  const selectedRoleOption =
+    ROLE_OPTIONS.find(opt => opt.value === currentDefaultRole) ||
+    ROLE_OPTIONS[3]; // Default to Reader if not found
+
+  const handleDefaultRoleChange = useCallback(
+    async (role: DocRole) => {
+      if (role !== currentDefaultRole) {
+        try {
+          await space.updateDefaultRole(role);
+        } catch (error) {
+          console.error('Failed to update default role:', error);
+        }
+      }
+    },
+    [space, currentDefaultRole]
+  );
+
+  useEffect(() => {
+    spaceMembersService.setSpace(space.id);
+    spaceMembersService.loadMore();
+  }, [spaceMembersService, space.id]);
+
+  const handleAddMemberClick = useCallback(() => {
+    setShowAddMember(true);
+  }, []);
+
+  const handleMembersAdded = useCallback(() => {
+    setShowAddMember(false);
+    spaceMembersService.reset();
+    spaceMembersService.loadMore();
+  }, [spaceMembersService]);
+
+  const handleLoadMore = useCallback(() => {
+    if (hasMore && !isLoading) {
+      spaceMembersService.loadMore();
+    }
+  }, [hasMore, isLoading, spaceMembersService]);
+
+  const menuItems = useMemo(() => {
+    return ROLE_OPTIONS.map(option => (
+      <MenuItem
+        key={option.value}
+        onSelect={() => void handleDefaultRoleChange(option.value)}
+      >
+        <div className={styles.roleMenuItem}>
+          <div className={styles.roleName}>{option.label}</div>
+          <div className={styles.roleDescription}>{option.description}</div>
+        </div>
+      </MenuItem>
+    ));
+  }, [handleDefaultRoleChange]);
+
+  if (showAddMember) {
+    return (
+      <div className={styles.section}>
+        <SpaceMemberPicker
+          onClose={() => setShowAddMember(false)}
+          onMembersAdded={handleMembersAdded}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={styles.section}>
-      <div className={styles.sectionTitle}>
-        {t['com.affine.space.members']?.() || 'Members'}
-      </div>
-      <div className={styles.memberList}>
-        <div
-          style={{
-            padding: 24,
-            textAlign: 'center',
-            color: 'var(--affine-text-secondary-color)',
-          }}
-        >
-          {t['com.affine.space.membersComingSoon']?.() ||
-            'Member management coming soon. Use the default role setting to control access for workspace members.'}
+      <div className={styles.sectionContent}>
+        <div className={styles.inputWrapper}>
+          <label className={styles.label}>
+            {'Default Access for All Workspace members'}
+          </label>
+          <Menu items={menuItems}>
+            <MenuTrigger
+              variant="plain"
+              className={styles.dropdownTrigger}
+              contentStyle={{
+                width: '100%',
+              }}
+            >
+              {selectedRoleOption.label}
+            </MenuTrigger>
+          </Menu>
+        </div>
+
+        <div className={styles.sectionHeader}>
+          <div className={styles.sectionTitle}>
+            {'Members with Special Access'}
+            {memberCount > 0 && ` (${memberCount})`}
+          </div>
+          {canManageUsers && (
+            <Button variant="primary" onClick={handleAddMemberClick}>
+              {t['com.affine.space.addMember']?.() || 'Add Member'}
+            </Button>
+          )}
+        </div>
+
+        <div className={styles.memberList}>
+          {isLoading && members.length === 0 ? (
+            <div className={styles.loadingContainer}>
+              <Loading />
+            </div>
+          ) : members.length === 0 ? (
+            <div className={styles.emptyState}>
+              <div className={styles.emptyStateTitle}>
+                {t['com.affine.space.noMembers']?.() ||
+                  'No members with explicit roles'}
+              </div>
+              <div className={styles.emptyStateDescription}>
+                {t['com.affine.space.noMembersDescription']?.() ||
+                  'All workspace members have access through the default role. Add members to give them specific permissions.'}
+              </div>
+            </div>
+          ) : (
+            <>
+              {members.map(member => (
+                <SpaceMemberItem
+                  key={member.user.id}
+                  member={member}
+                  canManageUsers={canManageUsers}
+                  canTransferOwner={canTransferOwner}
+                />
+              ))}
+              {hasMore && (
+                <Button
+                  variant="plain"
+                  onClick={handleLoadMore}
+                  disabled={isLoading}
+                  className={styles.loadMoreButton}
+                >
+                  {isLoading
+                    ? t['Loading']?.() || 'Loading...'
+                    : t['com.affine.space.loadMore']?.() || 'Load more'}
+                </Button>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -294,10 +521,10 @@ export const SpaceSettingDialog = ({
           </div>
           <div
             className={styles.tab}
-            data-active={activeTab === 'members'}
-            onClick={() => setActiveTab('members')}
+            data-active={activeTab === 'access'}
+            onClick={() => setActiveTab('access')}
           >
-            {t['com.affine.space.members']?.() || 'Members'}
+            {'Access'}
           </div>
           <div
             className={styles.tab}
@@ -312,7 +539,7 @@ export const SpaceSettingDialog = ({
         {activeTab === 'general' && (
           <GeneralTab space={space} onClose={onCancel} />
         )}
-        {activeTab === 'members' && <MembersTab space={space} />}
+        {activeTab === 'access' && <AccessTab space={space} />}
         {activeTab === 'danger' && (
           <DangerZoneTab space={space} onClose={onCancel} />
         )}

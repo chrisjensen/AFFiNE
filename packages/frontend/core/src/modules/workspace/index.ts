@@ -10,6 +10,7 @@ export type { WorkspaceFlavourProvider } from './providers/flavour';
 export { WorkspaceFlavoursProvider } from './providers/flavour';
 export { WorkspaceLocalCache, WorkspaceLocalState } from './providers/storage';
 export { WorkspaceScope } from './scopes/workspace';
+export { WorkspaceEngineService } from './services/engine';
 export { WorkspaceService } from './services/workspace';
 export { WorkspacesService } from './services/workspaces';
 

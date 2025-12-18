@@ -4,6 +4,7 @@ import { DocsService } from '../doc';
 import { DocsSearchService } from '../docs-search';
 import { FavoriteService } from '../favorite';
 import { ShareDocsListService } from '../share-doc';
+import { SpaceService } from '../space';
 import { TagService } from '../tag';
 import { WorkspaceScope } from '../workspace';
 import { WorkspacePropertyService } from '../workspace-property';
@@ -21,6 +22,8 @@ import { NumberPropertyFilterProvider } from './impls/filters/number';
 import { PageWidthFilterProvider } from './impls/filters/page-width';
 import { PropertyFilterProvider } from './impls/filters/property';
 import { SharedFilterProvider } from './impls/filters/shared';
+import { SpaceFilterProvider } from './impls/filters/space';
+import { SpaceAccessibleFilterProvider } from './impls/filters/space-accessible';
 import { SystemFilterProvider } from './impls/filters/system';
 import { TagsFilterProvider } from './impls/filters/tags';
 import { TemplateFilterProvider } from './impls/filters/template';
@@ -179,6 +182,15 @@ export function configureCollectionRulesModule(framework: Framework) {
     .impl(FilterProvider('system:pageWidth'), PageWidthFilterProvider, [
       DocsService,
     ])
+    .impl(FilterProvider('system:space'), SpaceFilterProvider, [
+      SpaceService,
+      DocsService,
+    ])
+    .impl(
+      FilterProvider('system:space-accessible'),
+      SpaceAccessibleFilterProvider,
+      [DocsService, SpaceService]
+    )
     // --------------- Group By ---------------
     .impl(GroupByProvider('system'), SystemGroupByProvider)
     .impl(GroupByProvider('property'), PropertyGroupByProvider, [
