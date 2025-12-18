@@ -337,3 +337,134 @@ export async function enableShare(page: Page) {
   await page.waitForTimeout(500);
   await page.getByTestId('share-link-menu-enable-share').click();
 }
+
+// Space permission values matching backend DocRole enum
+export const SpaceRole = {
+  None: -(1 << 15), // -32768, truly no access (not even read)
+  External: 0, // Minimal access (can read)
+  Reader: 10,
+  Commenter: 15,
+  Editor: 20,
+  Manager: 30,
+  Owner: 99,
+} as const;
+
+export async function createSpace(
+  workspaceId: string,
+  creatorUserId: string,
+  name: string,
+  defaultRole: number = SpaceRole.Reader
+): Promise<{ id: string }> {
+  return await runPrisma(async client => {
+    const space = await client.workspaceSpace.create({
+      data: {
+        workspaceId,
+        name,
+        defaultRole,
+      },
+    });
+
+    // Add creator as owner of the space
+    await client.spaceUserRole.create({
+      data: {
+        spaceId: space.id,
+        userId: creatorUserId,
+        type: SpaceRole.Owner,
+      },
+    });
+
+    return { id: space.id };
+  });
+}
+
+export async function addUserToSpace(
+  spaceId: string,
+  userId: string,
+  role: number
+): Promise<void> {
+  await runPrisma(async client => {
+    await client.spaceUserRole.upsert({
+      where: {
+        spaceId_userId: {
+          spaceId,
+          userId,
+        },
+      },
+      create: {
+        spaceId,
+        userId,
+        type: role,
+      },
+      update: {
+        type: role,
+      },
+    });
+  });
+}
+
+export async function deleteSpace(spaceId: string): Promise<void> {
+  await runPrisma(async client => {
+    // Delete space users first
+    await client.spaceUserRole.deleteMany({
+      where: { spaceId },
+    });
+    // Delete space docs
+    await client.spaceDoc.deleteMany({
+      where: { spaceId },
+    });
+    // Delete the space
+    await client.workspaceSpace.delete({
+      where: { id: spaceId },
+    });
+  });
+}
+
+export async function moveDocToSpace(
+  docId: string,
+  spaceId: string | null
+): Promise<void> {
+  await runPrisma(async client => {
+    // Remove from all current spaces
+    await client.spaceDoc.deleteMany({
+      where: { docId },
+    });
+
+    // Add to new space if specified
+    if (spaceId) {
+      await client.spaceDoc.create({
+        data: {
+          spaceId,
+          docId,
+        },
+      });
+    }
+  });
+}
+
+export async function getDocSpaceId(docId: string): Promise<string | null> {
+  return await runPrisma(async client => {
+    const spaceDoc = await client.spaceDoc.findFirst({
+      where: { docId },
+    });
+    return spaceDoc?.spaceId ?? null;
+  });
+}
+
+export async function createDocInWorkspace(
+  workspaceId: string,
+  docId: string
+): Promise<void> {
+  await runPrisma(async client => {
+    // Create a snapshot entry for the doc
+    await client.snapshot.create({
+      data: {
+        workspaceId,
+        id: docId,
+        blob: Buffer.from([]),
+        seq: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+  });
+}

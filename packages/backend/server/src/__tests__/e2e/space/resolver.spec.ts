@@ -424,3 +424,435 @@ e2e('member with default role should access space', async t => {
   t.is(spaces[0].id, space.id);
   t.is(spaces[0].role, DocRole.Reader);
 });
+
+// =============================================================================
+// Security Tests: Space Permission Enforcement for docIds and docCount
+// =============================================================================
+
+const getSpaceWithDocIdsQuery: GqlQuery = {
+  id: 'getSpaceWithDocIdsQuery',
+  op: 'getSpace',
+  query: `query getSpace($workspaceId: String!, $spaceId: String!) {
+    getSpace(workspaceId: $workspaceId, spaceId: $spaceId) {
+      id
+      docIds
+      docCount
+    }
+  }`,
+};
+
+e2e('should NOT expose docIds for space where user has no access', async t => {
+  const owner = await app.signup();
+  const member = await app.signup();
+
+  const workspace = await app.create(Mockers.Workspace, {
+    owner: { id: owner.id },
+  });
+
+  // Add member to workspace
+  await app.create(Mockers.WorkspaceUser, {
+    workspaceId: workspace.id,
+    userId: member.id,
+  });
+
+  // Create space with defaultRole: None (no access for workspace members)
+  const space = await app.create(Mockers.Space, {
+    workspace: { id: workspace.id },
+    owner: { id: owner.id },
+    defaultRole: DocRole.None,
+  });
+
+  // Add a doc to the space
+  await app.create(Mockers.SpaceDoc, {
+    space: { id: space.id },
+    docId: 'secret-doc-id',
+  });
+
+  // Login as member (who has no space access)
+  await app.login(member);
+
+  // Should get error when trying to access the space
+  await t.throwsAsync(
+    async () => {
+      await rawGql(getSpaceWithDocIdsQuery, {
+        workspaceId: workspace.id,
+        spaceId: space.id,
+      });
+    },
+    { message: /Space not found|Access denied|permission/i }
+  );
+});
+
+e2e('should expose docIds for space where user has Reader role', async t => {
+  const owner = await app.signup();
+  const member = await app.signup();
+
+  const workspace = await app.create(Mockers.Workspace, {
+    owner: { id: owner.id },
+  });
+
+  // Add member to workspace
+  await app.create(Mockers.WorkspaceUser, {
+    workspaceId: workspace.id,
+    userId: member.id,
+  });
+
+  const space = await app.create(Mockers.Space, {
+    workspace: { id: workspace.id },
+    owner: { id: owner.id },
+    defaultRole: DocRole.Reader, // Members get Reader access
+  });
+
+  // Add a doc to the space
+  await app.create(Mockers.SpaceDoc, {
+    space: { id: space.id },
+    docId: 'visible-doc-id',
+  });
+
+  // Login as member
+  await app.login(member);
+
+  const result = await rawGql(getSpaceWithDocIdsQuery, {
+    workspaceId: workspace.id,
+    spaceId: space.id,
+  });
+
+  t.deepEqual(result.getSpace.docIds, ['visible-doc-id']);
+  t.is(result.getSpace.docCount, 1);
+});
+
+e2e('should expose docIds for space owner', async t => {
+  const owner = await app.signup();
+
+  const workspace = await app.create(Mockers.Workspace, {
+    owner: { id: owner.id },
+  });
+
+  // Create space with defaultRole: None but owner should still see
+  const space = await app.create(Mockers.Space, {
+    workspace: { id: workspace.id },
+    owner: { id: owner.id },
+    defaultRole: DocRole.None,
+  });
+
+  // Add docs to the space
+  await app.create(Mockers.SpaceDoc, {
+    space: { id: space.id },
+    docId: 'doc-1',
+  });
+  await app.create(Mockers.SpaceDoc, {
+    space: { id: space.id },
+    docId: 'doc-2',
+  });
+
+  const result = await rawGql(getSpaceWithDocIdsQuery, {
+    workspaceId: workspace.id,
+    spaceId: space.id,
+  });
+
+  t.is(result.getSpace.docIds.length, 2);
+  t.true(result.getSpace.docIds.includes('doc-1'));
+  t.true(result.getSpace.docIds.includes('doc-2'));
+  t.is(result.getSpace.docCount, 2);
+});
+
+e2e('workspace owner should see docIds in any space', async t => {
+  const owner = await app.signup();
+  const member = await app.signup();
+
+  const workspace = await app.create(Mockers.Workspace, {
+    owner: { id: owner.id },
+  });
+
+  // Add member to workspace
+  await app.create(Mockers.WorkspaceUser, {
+    workspaceId: workspace.id,
+    userId: member.id,
+  });
+
+  // Member creates a space with no default access
+  const space = await app.create(Mockers.Space, {
+    workspace: { id: workspace.id },
+    owner: { id: member.id },
+    defaultRole: DocRole.None,
+  });
+
+  // Add a doc to the space
+  await app.create(Mockers.SpaceDoc, {
+    space: { id: space.id },
+    docId: 'member-doc',
+  });
+
+  // Workspace owner should still be able to see docIds
+  const result = await rawGql(getSpaceWithDocIdsQuery, {
+    workspaceId: workspace.id,
+    spaceId: space.id,
+  });
+
+  t.deepEqual(result.getSpace.docIds, ['member-doc']);
+  t.is(result.getSpace.docCount, 1);
+});
+
+// =============================================================================
+// Move Doc to Space Tests: meta.pages and SpaceDoc table updates
+// =============================================================================
+
+const moveDocToSpaceMutation: GqlQuery = {
+  id: 'moveDocToSpaceMutation',
+  op: 'moveDocToSpace',
+  query: `mutation moveDocToSpace($input: MoveDocToSpaceInput!) {
+    moveDocToSpace(input: $input)
+  }`,
+};
+
+e2e('moveDocToSpace should update space docIds', async t => {
+  const owner = await app.signup();
+
+  const workspace = await app.create(Mockers.Workspace, {
+    owner: { id: owner.id },
+  });
+
+  const space = await app.create(Mockers.Space, {
+    workspace: { id: workspace.id },
+    owner: { id: owner.id },
+    defaultRole: DocRole.Editor,
+  });
+
+  // Create a doc in the workspace
+  const docId = 'test-doc-for-move';
+  await app.create(Mockers.DocSnapshot, {
+    user: { id: owner.id },
+    workspaceId: workspace.id,
+    docId,
+  });
+
+  // Verify space initially has 0 docs
+  let result = await rawGql(getSpaceWithDocIdsQuery, {
+    workspaceId: workspace.id,
+    spaceId: space.id,
+  });
+  t.is(result.getSpace.docCount, 0, 'Space should have 0 docs initially');
+  t.deepEqual(
+    result.getSpace.docIds,
+    [],
+    'Space docIds should be empty initially'
+  );
+
+  // Move doc to space
+  await rawGql(moveDocToSpaceMutation, {
+    input: {
+      workspaceId: workspace.id,
+      docId,
+      spaceId: space.id,
+    },
+  });
+
+  // Verify doc is now in space
+  result = await rawGql(getSpaceWithDocIdsQuery, {
+    workspaceId: workspace.id,
+    spaceId: space.id,
+  });
+  t.is(result.getSpace.docCount, 1, 'Space should have 1 doc after move');
+  t.deepEqual(
+    result.getSpace.docIds,
+    [docId],
+    'Space docIds should contain moved doc'
+  );
+});
+
+e2e(
+  'moveDocToSpace should update docIds when moving between spaces',
+  async t => {
+    const owner = await app.signup();
+
+    const workspace = await app.create(Mockers.Workspace, {
+      owner: { id: owner.id },
+    });
+
+    const space1 = await app.create(Mockers.Space, {
+      workspace: { id: workspace.id },
+      owner: { id: owner.id },
+      name: 'Space 1',
+      defaultRole: DocRole.Editor,
+    });
+
+    const space2 = await app.create(Mockers.Space, {
+      workspace: { id: workspace.id },
+      owner: { id: owner.id },
+      name: 'Space 2',
+      defaultRole: DocRole.Editor,
+    });
+
+    // Create a doc and add it to space1
+    const docId = 'test-doc-for-move';
+    await app.create(Mockers.DocSnapshot, {
+      user: { id: owner.id },
+      workspaceId: workspace.id,
+      docId,
+    });
+    await app.create(Mockers.SpaceDoc, {
+      space: { id: space1.id },
+      docId,
+    });
+
+    // Verify space1 has the doc
+    let result = await rawGql(getSpaceWithDocIdsQuery, {
+      workspaceId: workspace.id,
+      spaceId: space1.id,
+    });
+    t.is(result.getSpace.docCount, 1, 'Space1 should have 1 doc');
+    t.deepEqual(
+      result.getSpace.docIds,
+      [docId],
+      'Space1 docIds should contain the doc'
+    );
+
+    // Verify space2 has no docs
+    result = await rawGql(getSpaceWithDocIdsQuery, {
+      workspaceId: workspace.id,
+      spaceId: space2.id,
+    });
+    t.is(result.getSpace.docCount, 0, 'Space2 should have 0 docs initially');
+
+    // Move doc from space1 to space2
+    await rawGql(moveDocToSpaceMutation, {
+      input: {
+        workspaceId: workspace.id,
+        docId,
+        spaceId: space2.id,
+      },
+    });
+
+    // Verify doc is removed from space1
+    result = await rawGql(getSpaceWithDocIdsQuery, {
+      workspaceId: workspace.id,
+      spaceId: space1.id,
+    });
+    t.is(result.getSpace.docCount, 0, 'Space1 should have 0 docs after move');
+    t.deepEqual(
+      result.getSpace.docIds,
+      [],
+      'Space1 docIds should be empty after move'
+    );
+
+    // Verify doc is now in space2
+    result = await rawGql(getSpaceWithDocIdsQuery, {
+      workspaceId: workspace.id,
+      spaceId: space2.id,
+    });
+    t.is(result.getSpace.docCount, 1, 'Space2 should have 1 doc after move');
+    t.deepEqual(
+      result.getSpace.docIds,
+      [docId],
+      'Space2 docIds should contain moved doc'
+    );
+  }
+);
+
+e2e('moveDocToSpace should handle moving to workspace root', async t => {
+  const owner = await app.signup();
+
+  const workspace = await app.create(Mockers.Workspace, {
+    owner: { id: owner.id },
+  });
+
+  const space = await app.create(Mockers.Space, {
+    workspace: { id: workspace.id },
+    owner: { id: owner.id },
+    defaultRole: DocRole.Editor,
+  });
+
+  // Create a doc and add it to space
+  const docId = 'test-doc-for-move';
+  await app.create(Mockers.DocSnapshot, {
+    user: { id: owner.id },
+    workspaceId: workspace.id,
+    docId,
+  });
+  await app.create(Mockers.SpaceDoc, {
+    space: { id: space.id },
+    docId,
+  });
+
+  // Verify space has the doc
+  let result = await rawGql(getSpaceWithDocIdsQuery, {
+    workspaceId: workspace.id,
+    spaceId: space.id,
+  });
+  t.is(result.getSpace.docCount, 1, 'Space should have 1 doc');
+
+  // Move doc to workspace root (null spaceId)
+  await rawGql(moveDocToSpaceMutation, {
+    input: {
+      workspaceId: workspace.id,
+      docId,
+      spaceId: null,
+    },
+  });
+
+  // Verify doc is removed from space
+  result = await rawGql(getSpaceWithDocIdsQuery, {
+    workspaceId: workspace.id,
+    spaceId: space.id,
+  });
+  t.is(
+    result.getSpace.docCount,
+    0,
+    'Space should have 0 docs after move to workspace root'
+  );
+  t.deepEqual(
+    result.getSpace.docIds,
+    [],
+    'Space docIds should be empty after move'
+  );
+});
+
+e2e(
+  'user without space access should not be able to move doc to space',
+  async t => {
+    const owner = await app.signup();
+    const member = await app.signup();
+
+    const workspace = await app.create(Mockers.Workspace, {
+      owner: { id: owner.id },
+    });
+
+    // Add member to workspace
+    await app.create(Mockers.WorkspaceUser, {
+      workspaceId: workspace.id,
+      userId: member.id,
+    });
+
+    // Create space with no default access (member can't access)
+    const space = await app.create(Mockers.Space, {
+      workspace: { id: workspace.id },
+      owner: { id: owner.id },
+      defaultRole: DocRole.External, // No access for workspace members
+    });
+
+    // Create a doc in the workspace
+    const docId = 'test-doc-for-move';
+    await app.create(Mockers.DocSnapshot, {
+      user: { id: owner.id },
+      workspaceId: workspace.id,
+      docId,
+    });
+
+    // Login as member
+    await app.login(member);
+
+    // Member should not be able to move doc to space they don't have access to
+    await t.throwsAsync(
+      async () => {
+        await rawGql(moveDocToSpaceMutation, {
+          input: {
+            workspaceId: workspace.id,
+            docId,
+            spaceId: space.id,
+          },
+        });
+      },
+      { message: /denied|permission|access/i }
+    );
+  }
+);
