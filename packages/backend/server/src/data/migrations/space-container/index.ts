@@ -273,3 +273,5 @@ export async function rollbackSpaceContainers(prisma: PrismaClient) {
 
   logger.log('Space-as-Container rollback completed');
 }
+
+export { repairMetaPages } from './repair-meta-pages';
