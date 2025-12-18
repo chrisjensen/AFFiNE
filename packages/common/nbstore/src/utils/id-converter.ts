@@ -25,13 +25,27 @@ export async function getIdConverter(
     applyUpdate(ydoc, rootDocBuffer);
 
     // get all ids from rootDoc.meta.pages.[*].id, trust this id as normalized id
-    const normalizedDocIds = (
-      (ydoc.getMap('meta') as YMap<any> | undefined)?.get('pages') as
-        | YArray<YMap<any>>
-        | undefined
-    )
-      ?.map(i => i.get('id') as string)
-      .filter(i => !!i);
+    const pages = (ydoc.getMap('meta') as YMap<any> | undefined)?.get('pages');
+    const normalizedDocIds = pages
+      ?.map((item: unknown, index: number) => {
+        // Items in meta.pages must be YMap instances for proper CRDT sync
+        if (
+          !(
+            item &&
+            typeof item === 'object' &&
+            'get' in item &&
+            typeof (item as any).get === 'function'
+          )
+        ) {
+          console.error(
+            `[id-converter] Expected YMap at meta.pages[${index}] but got ${typeof item}. ` +
+              `Server may be sending incorrectly formatted data.`
+          );
+          return null;
+        }
+        return (item as YMap<any>).get('id') as string;
+      })
+      .filter((i: string | null): i is string => i !== null);
 
     const spaces = ydoc.getMap('spaces') as YMap<any> | undefined;
     for (const pageId of normalizedDocIds ?? []) {

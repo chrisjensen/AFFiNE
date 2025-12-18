@@ -14,6 +14,19 @@ import { Array as YArray, Map as YMap, transact } from 'yjs';
 import type { WorkspaceService } from '../../workspace';
 import type { DocPropertiesStore } from './doc-properties';
 
+/**
+ * Assert that an item from meta.pages is a YMap.
+ * Throws a clear error if the server sent incorrectly formatted data.
+ */
+function assertYMap(item: unknown, context: string): asserts item is YMap<any> {
+  if (!(item instanceof YMap)) {
+    throw new Error(
+      `Expected YMap in meta.pages but got ${typeof item}. ` +
+        `This indicates the server sent incorrectly formatted data. Context: ${context}`
+    );
+  }
+}
+
 export class DocsStore extends Store {
   constructor(
     private readonly workspaceService: WorkspaceService,
@@ -71,7 +84,10 @@ export class DocsStore extends Store {
       switchMap(yjsObserve),
       map(meta => {
         if (meta instanceof YArray) {
-          return meta.map(v => v.get('id') as string);
+          return meta.map((v, i) => {
+            assertYMap(v, `watchDocIds index ${i}`);
+            return v.get('id') as string;
+          });
         } else {
           return [];
         }
@@ -87,10 +103,13 @@ export class DocsStore extends Store {
       switchMap(pages => yjsObservePath(pages, '*.updatedDate')),
       map(pages => {
         if (pages instanceof YArray) {
-          return pages.map(v => ({
-            id: v.get('id') as string,
-            updatedDate: v.get('updatedDate') as number | undefined,
-          }));
+          return pages.map((v, i) => {
+            assertYMap(v, `watchAllDocUpdatedDate index ${i}`);
+            return {
+              id: v.get('id') as string,
+              updatedDate: v.get('updatedDate') as number | undefined,
+            };
+          });
         } else {
           return [];
         }
@@ -106,16 +125,19 @@ export class DocsStore extends Store {
       switchMap(pages => yjsObservePath(pages, '*.tags')),
       map(pages => {
         if (pages instanceof YArray) {
-          return pages.map(v => ({
-            id: v.get('id') as string,
-            tags: (() => {
-              const tags = v.get('tags');
-              if (tags instanceof YArray) {
-                return tags.toJSON() as string[];
-              }
-              return (tags ?? []) as string[];
-            })(),
-          }));
+          return pages.map((v, i) => {
+            assertYMap(v, `watchAllDocTagIds index ${i}`);
+            return {
+              id: v.get('id') as string,
+              tags: (() => {
+                const tags = v.get('tags');
+                if (tags instanceof YArray) {
+                  return tags.toJSON() as string[];
+                }
+                return (tags ?? []) as string[];
+              })(),
+            };
+          });
         } else {
           return [];
         }
@@ -131,10 +153,13 @@ export class DocsStore extends Store {
       switchMap(pages => yjsObservePath(pages, '*.createDate')),
       map(pages => {
         if (pages instanceof YArray) {
-          return pages.map(v => ({
-            id: v.get('id') as string,
-            createDate: (v.get('createDate') ?? 0) as number,
-          }));
+          return pages.map((v, i) => {
+            assertYMap(v, `watchAllDocCreateDate index ${i}`);
+            return {
+              id: v.get('id') as string,
+              createDate: (v.get('createDate') ?? 0) as number,
+            };
+          });
         } else {
           return [];
         }
@@ -150,10 +175,13 @@ export class DocsStore extends Store {
       switchMap(pages => yjsObservePath(pages, '*.title')),
       map(pages => {
         if (pages instanceof YArray) {
-          return pages.map(v => ({
-            id: v.get('id') as string,
-            title: (v.get('title') ?? '') as string,
-          }));
+          return pages.map((v, i) => {
+            assertYMap(v, `watchAllDocTitle index ${i}`);
+            return {
+              id: v.get('id') as string,
+              title: (v.get('title') ?? '') as string,
+            };
+          });
         } else {
           return [];
         }
@@ -170,7 +198,10 @@ export class DocsStore extends Store {
       map(meta => {
         if (meta instanceof YArray) {
           return meta
-            .map(v => (v.get('trash') ? null : v.get('id')))
+            .map((v, i) => {
+              assertYMap(v, `watchNonTrashDocIds index ${i}`);
+              return v.get('trash') ? null : v.get('id');
+            })
             .filter(Boolean) as string[];
         } else {
           return [];
@@ -188,7 +219,10 @@ export class DocsStore extends Store {
       map(meta => {
         if (meta instanceof YArray) {
           return meta
-            .map(v => (v.get('trash') ? v.get('id') : null))
+            .map((v, i) => {
+              assertYMap(v, `watchTrashDocIds index ${i}`);
+              return v.get('trash') ? v.get('id') : null;
+            })
             .filter(Boolean) as string[];
         } else {
           return [];
@@ -208,17 +242,23 @@ export class DocsStore extends Store {
         if (meta instanceof YArray) {
           if (docMetaIndexCache >= 0) {
             const doc = meta.get(docMetaIndexCache);
-            if (doc && doc.get('id') === id) {
-              return doc as YMap<any>;
+            if (doc) {
+              assertYMap(doc, `watchDocMeta cached index ${docMetaIndexCache}`);
+              if (doc.get('id') === id) {
+                return doc as YMap<any>;
+              }
             }
           }
 
           // meta is YArray, `for-of` is faster then `for`
           let i = 0;
           for (const doc of meta) {
-            if (doc && doc.get('id') === id) {
-              docMetaIndexCache = i;
-              return doc as YMap<any>;
+            if (doc) {
+              assertYMap(doc, `watchDocMeta index ${i}`);
+              if (doc.get('id') === id) {
+                docMetaIndexCache = i;
+                return doc as YMap<any>;
+              }
             }
             i++;
           }
