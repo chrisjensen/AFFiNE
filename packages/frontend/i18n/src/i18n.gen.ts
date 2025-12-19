@@ -6854,6 +6854,10 @@ export function useAFFiNEI18N(): {
       */
     ["com.affine.share-menu.option.permission.can-edit"](): string;
     /**
+      * `Can comment`
+      */
+    ["com.affine.share-menu.option.permission.can-comment"](): string;
+    /**
       * `Can read`
       */
     ["com.affine.share-menu.option.permission.can-read"](): string;

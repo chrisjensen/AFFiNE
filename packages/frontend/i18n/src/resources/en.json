@@ -1717,6 +1717,7 @@
   "com.affine.share-menu.option.link.readonly.description": "Anyone can access this link",
   "com.affine.share-menu.option.permission.can-manage": "Can manage",
   "com.affine.share-menu.option.permission.can-edit": "Can edit",
+  "com.affine.share-menu.option.permission.can-comment": "Can comment",
   "com.affine.share-menu.option.permission.can-read": "Can read",
   "com.affine.share-menu.option.permission.no-access": "No access",
   "com.affine.share-menu.option.permission.label": "Members in workspace",

@@ -279,8 +279,7 @@ export class SpaceSyncGateway
     const adapter = this.selectAdapter(client, spaceType);
     const id = new DocID(docId, spaceId);
 
-    // TODO(@forehalo): enable after frontend supporting doc revert
-    // await this.ac.user(user.id).doc(spaceId, id.guid).assert('Doc.Update');
+    // Permission check moved to WorkspaceSyncAdapter.push()
     const timestamp = await adapter.push(
       spaceId,
       id.guid,
@@ -320,8 +319,7 @@ export class SpaceSyncGateway
     const { spaceType, spaceId, docId, update } = message;
     const adapter = this.selectAdapter(client, spaceType);
 
-    // TODO(@forehalo): enable after frontend supporting doc revert
-    // await this.ac.user(user.id).doc(spaceId, docId).assert('Doc.Update');
+    // Permission check moved to WorkspaceSyncAdapter.push()
     const timestamp = await adapter.push(
       spaceId,
       docId,
@@ -541,6 +539,21 @@ class WorkspaceSyncAdapter extends SyncSocketAdapter {
     if (docMeta?.blocked) {
       throw new DocUpdateBlocked({ spaceId, docId });
     }
+
+    // Check space permission if doc is in a space
+    // Users with Reader/Commenter roles cannot edit docs in spaces
+    const containerSpace = await this.models.spaceDoc.getSpaceForDoc(docId);
+    if (containerSpace) {
+      // User must have Space.Sync permission to edit docs in this space
+      await this.ac
+        .user(editorId)
+        .space(spaceId, containerSpace.spaceId)
+        .assert('Space.Sync');
+    }
+
+    // Check doc-level permission
+    await this.ac.user(editorId).doc(spaceId, docId).assert('Doc.Update');
+
     return await super.push(spaceId, docId, updates, editorId);
   }
 
@@ -557,8 +570,8 @@ class WorkspaceSyncAdapter extends SyncSocketAdapter {
     userId: string,
     action: WorkspaceAction | SpaceAction
   ) {
-    // Simple workspace-only check (original behavior)
-    // TODO: Add Space-level permission check when Space sync is implemented
+    // Check workspace-level sync permission (required to join the sync room)
+    // Note: Space-level edit permissions are checked in push() method
     await this.ac
       .user(userId)
       .workspace(spaceId)
