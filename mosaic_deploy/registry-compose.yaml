@@ -1,0 +1,49 @@
+version: '3.8'
+
+# Docker Registry for Coolify (Internal Only)
+# NOT exposed to the internet - only accessible via:
+#   1. Other containers on the same Docker network
+#   2. SSH tunnel from your local machine
+#
+# Setup steps:
+# 1. Create new Docker Compose service in Coolify
+# 2. Paste this file contents
+# 3. DO NOT configure a public domain - leave it internal
+# 4. Deploy
+# 5. Registry is now only accessible internally
+
+services:
+  registry:
+    image: registry:2
+    container_name: docker-registry
+    restart: unless-stopped
+    # Bind to localhost only for SSH tunnel access
+    ports:
+      - "127.0.0.1:5000:5000"
+    expose:
+      - "5000"
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+      # Basic auth for defense-in-depth
+      REGISTRY_AUTH: htpasswd
+      REGISTRY_AUTH_HTPASSWD_REALM: "Registry Realm"
+      REGISTRY_AUTH_HTPASSWD_PATH: /auth/htpasswd
+    volumes:
+      - registry-data:/var/lib/registry
+      - registry-auth:/auth
+    networks:
+      - coolify
+    labels:
+      - "coolify.managed=true"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+volumes:
+  registry-data:
+  registry-auth:
+
+networks:
+  coolify:
+    external: true
