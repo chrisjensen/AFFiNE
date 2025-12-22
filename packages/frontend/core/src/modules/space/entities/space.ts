@@ -7,6 +7,7 @@ import { SpaceMetaImpl } from '../impls/meta';
 import {
   type DocRole,
   numericToDocRole,
+  type SpaceIconData,
   type SpaceInfo,
   type SpaceStore,
 } from '../stores/space';
@@ -79,7 +80,7 @@ export class Space extends Entity<{ spaceInfo: SpaceInfo }> {
     return updated;
   }
 
-  async updateIcon(icon: string | null) {
+  async updateIcon(icon: SpaceIconData) {
     const updated = await this.store.updateSpace(this.id, {
       icon: icon ?? undefined,
     });

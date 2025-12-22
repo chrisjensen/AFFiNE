@@ -40,12 +40,18 @@ export function numericToDocRole(
   return NUMERIC_TO_DOC_ROLE[value] ?? DocRole.External;
 }
 
+// Icon data stored as JSONB in database
+export type SpaceIconData =
+  | { type: 'emoji'; unicode: string }
+  | { type: 'affine-icon'; name: string; color: string }
+  | null;
+
 export interface SpaceInfo {
   id: string;
   workspaceId: string;
   name: string;
   description: string | null;
-  icon: string | null;
+  icon: SpaceIconData;
   // defaultRole comes from GraphQL as Int (number), but we convert to DocRole string
   defaultRole: number | DocRole;
   // role comes from GraphQL as DocRole enum (string)
@@ -70,14 +76,14 @@ export interface CreateSpaceInput {
   workspaceId: string;
   name: string;
   description?: string;
-  icon?: string;
+  icon?: SpaceIconData;
   defaultRole?: DocRole;
 }
 
 export interface UpdateSpaceInput {
   name?: string;
   description?: string;
-  icon?: string;
+  icon?: SpaceIconData;
   defaultRole?: DocRole;
 }
 
