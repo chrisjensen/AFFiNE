@@ -1,10 +1,8 @@
 import { LiveData, OnEvent, Service } from '@toeverything/infra';
 
-import { resolveLinkToDoc } from '../../navigation';
 import type { GlobalState } from '../../storage';
 import { WorkbenchLocationChanged } from '../../workbench/services/workbench';
 import type { WorkspacesService } from '../../workspace';
-import { getLocalWorkspaceIds } from '../../workspace-engine/impls/local';
 
 const storageKey = 'open-link-mode';
 
@@ -49,24 +47,8 @@ export class OpenInAppService extends Service {
     this.initialized = true;
     this.initialUrl = window.location.href;
 
-    const maybeDocLink = resolveLinkToDoc(this.initialUrl);
-    let shouldOpenInApp = false;
-
-    const localWorkspaceIds = getLocalWorkspaceIds();
-
-    if (maybeDocLink && !localWorkspaceIds.includes(maybeDocLink.workspaceId)) {
-      switch (this.getOpenLinkMode()) {
-        case OpenLinkMode.OPEN_IN_DESKTOP_APP:
-          shouldOpenInApp = true;
-          break;
-        case OpenLinkMode.ALWAYS_ASK:
-          this.showOpenInAppBanner$.next(true);
-          break;
-        default:
-          break;
-      }
-    }
-    this.showOpenInAppPage$.next(shouldOpenInApp);
+    // Disabled: Custom build does not prompt for desktop app download
+    this.showOpenInAppPage$.next(false);
   }
 
   showOpenInAppPage() {
