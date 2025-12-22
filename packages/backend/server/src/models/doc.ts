@@ -813,4 +813,41 @@ export class DocModel extends BaseModel {
   }
 
   // #endregion
+
+  // #region Cross-workspace lookup
+
+  /**
+   * Find which workspace a document belongs to by its docId.
+   * Used for 301 redirect resolution when a document has been moved.
+   * Returns null if the document doesn't exist in any workspace.
+   */
+  async findWorkspaceByDocId(docId: string): Promise<string | null> {
+    // First check snapshots table (primary storage)
+    const snapshot = await this.db.snapshot.findFirst({
+      where: {
+        id: docId,
+      },
+      select: {
+        workspaceId: true,
+      },
+    });
+
+    if (snapshot) {
+      return snapshot.workspaceId;
+    }
+
+    // If no snapshot, check if there are pending updates
+    const update = await this.db.update.findFirst({
+      where: {
+        id: docId,
+      },
+      select: {
+        workspaceId: true,
+      },
+    });
+
+    return update?.workspaceId ?? null;
+  }
+
+  // #endregion
 }

@@ -1225,6 +1225,34 @@ input MoveDocToSpaceInput {
   workspaceId: String!
 }
 
+"""How to traverse linked documents when moving"""
+enum LinkTraversalMode {
+  Immediate
+  Nested
+}
+
+input MoveDocToWorkspaceInput {
+  docId: String!
+  linkTraversalMode: LinkTraversalMode!
+  moveLinkedDocs: Boolean!
+  sourceWorkspaceId: String!
+
+  """Target space ID in the target workspace, null for workspace root"""
+  targetSpaceId: String
+  targetWorkspaceId: String!
+}
+
+type MoveDocResultType {
+  movedDocs: [MovedDocMappingType!]!
+  newWorkspaceId: String!
+  success: Boolean!
+}
+
+type MovedDocMappingType {
+  newDocId: String!
+  originalDocId: String!
+}
+
 type Mutation {
   acceptInviteById(inviteId: String!, sendAcceptMail: Boolean @deprecated(reason: "never used"), workspaceId: String @deprecated(reason: "never used")): Boolean!
   activateLicense(license: String!, workspaceId: String!): License!
@@ -1331,6 +1359,9 @@ type Mutation {
 
   """Move a doc to a space (or to workspace root if spaceId is null)"""
   moveDocToSpace(input: MoveDocToSpaceInput!): Boolean!
+
+  """Move a document to a different workspace"""
+  moveDocToWorkspace(input: MoveDocToWorkspaceInput!): MoveDocResultType!
   publishDoc(docId: String!, mode: PublicDocMode = Page, workspaceId: String!): DocType!
   publishPage(mode: PublicDocMode = Page, pageId: String!, workspaceId: String!): DocType! @deprecated(reason: "use publishDoc instead")
 

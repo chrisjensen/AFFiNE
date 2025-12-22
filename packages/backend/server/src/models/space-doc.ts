@@ -78,23 +78,33 @@ export class SpaceDocModel extends BaseModel {
       where: { docId },
     });
 
-    // Add to new space if specified
-    if (targetSpaceId) {
-      await this.addDoc(targetSpaceId, docId);
-    }
-
-    // Update the root documents' meta.pages
-    // Remove from source container (space or workspace)
+    // Remove from source container
     const sourceContainerId = currentSpaceId ?? workspaceId;
     await this.removeDocFromRootMeta(workspaceId, sourceContainerId, docId);
 
-    // Add to target container (space or workspace)
-    const targetContainerId = targetSpaceId ?? workspaceId;
-    await this.addDocToRootMeta(workspaceId, targetContainerId, docId);
+    // Assign to target container (space or workspace root)
+    await this.assignDocToContainer(workspaceId, docId, targetSpaceId);
 
     this.logger.log(
       `Doc [${docId}] moved to ${targetSpaceId ? `space [${targetSpaceId}]` : 'workspace root'}`
     );
+  }
+
+  /**
+   * Assign a doc to a container (space or workspace root) and update the root meta.
+   * This is a higher-level method that combines addDoc + addDocToRootMeta.
+   * Used for cross-workspace moves where we just need to set up the target location.
+   */
+  async assignDocToContainer(
+    workspaceId: string,
+    docId: string,
+    targetSpaceId: string | null
+  ): Promise<void> {
+    if (targetSpaceId) {
+      await this.addDoc(targetSpaceId, docId);
+    }
+    const targetContainerId = targetSpaceId ?? workspaceId;
+    await this.addDocToRootMeta(workspaceId, targetContainerId, docId);
   }
 
   /**

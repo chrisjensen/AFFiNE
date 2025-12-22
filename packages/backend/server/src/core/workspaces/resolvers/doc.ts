@@ -37,6 +37,7 @@ import {
   DocRole,
 } from '../../permission';
 import { PublicUserType, WorkspaceUserType } from '../../user';
+import { DocMoveService } from '../doc-move';
 import { WorkspaceType } from '../types';
 import {
   DotToUnderline,
@@ -47,6 +48,58 @@ registerEnumType(PublicDocMode, {
   name: 'PublicDocMode',
   description: 'The mode which the public doc default in',
 });
+
+enum LinkTraversalMode {
+  Immediate = 'immediate',
+  Nested = 'nested',
+}
+
+registerEnumType(LinkTraversalMode, {
+  name: 'LinkTraversalMode',
+  description: 'How to traverse linked documents when moving',
+});
+
+@InputType()
+class MoveDocToWorkspaceInput {
+  @Field(() => String)
+  sourceWorkspaceId!: string;
+
+  @Field(() => String)
+  docId!: string;
+
+  @Field(() => String)
+  targetWorkspaceId!: string;
+
+  @Field(() => String, { nullable: true })
+  targetSpaceId?: string | null;
+
+  @Field(() => Boolean)
+  moveLinkedDocs!: boolean;
+
+  @Field(() => LinkTraversalMode)
+  linkTraversalMode!: LinkTraversalMode;
+}
+
+@ObjectType()
+class MovedDocMappingType {
+  @Field(() => String)
+  originalDocId!: string;
+
+  @Field(() => String)
+  newDocId!: string;
+}
+
+@ObjectType()
+class MoveDocResultType {
+  @Field(() => Boolean)
+  success!: boolean;
+
+  @Field(() => [MovedDocMappingType])
+  movedDocs!: MovedDocMappingType[];
+
+  @Field(() => String)
+  newWorkspaceId!: string;
+}
 
 @ObjectType()
 class DocType {
@@ -473,7 +526,8 @@ export class DocResolver {
 
   constructor(
     private readonly ac: AccessController,
-    private readonly models: Models
+    private readonly models: Models,
+    private readonly docMoveService: DocMoveService
   ) {}
 
   @ResolveField(() => PublicUserType, {
@@ -732,5 +786,32 @@ export class DocResolver {
       input.role
     );
     return true;
+  }
+
+  @Mutation(() => MoveDocResultType, {
+    description: 'Move a document to a different workspace',
+  })
+  async moveDocToWorkspace(
+    @CurrentUser() user: CurrentUser,
+    @Args('input') input: MoveDocToWorkspaceInput
+  ): Promise<MoveDocResultType> {
+    this.logger.log(
+      `User ${user.id} moving doc ${input.docId} from workspace ${input.sourceWorkspaceId} to ${input.targetWorkspaceId}${input.targetSpaceId ? ` (space: ${input.targetSpaceId})` : ''}`
+    );
+
+    const result = await this.docMoveService.moveToWorkspace(user.id, {
+      sourceWorkspaceId: input.sourceWorkspaceId,
+      docId: input.docId,
+      targetWorkspaceId: input.targetWorkspaceId,
+      targetSpaceId: input.targetSpaceId,
+      moveLinkedDocs: input.moveLinkedDocs,
+      linkTraversalMode: input.linkTraversalMode,
+    });
+
+    this.logger.log(
+      `Successfully moved ${result.movedDocs.length} docs to workspace ${result.newWorkspaceId}`
+    );
+
+    return result;
   }
 }
