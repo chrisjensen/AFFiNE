@@ -1,33 +1,56 @@
 import type { DocMode } from '@blocksuite/affine/model';
 import { Entity, LiveData } from '@toeverything/infra';
-import { map } from 'rxjs';
+import { combineLatest, map, of, switchMap } from 'rxjs';
 
+import type { SpaceService } from '../../space/services/space';
 import type { DocsStore } from '../stores/docs';
 import { DocRecord } from './record';
 
 export class DocRecordList extends Entity {
-  constructor(private readonly store: DocsStore) {
+  constructor(
+    private readonly store: DocsStore,
+    private readonly spaceService: SpaceService
+  ) {
     super();
   }
 
   private readonly pool = new Map<string, DocRecord>();
 
   public readonly docsMap$ = LiveData.from<Map<string, DocRecord>>(
-    this.store.watchDocIds().pipe(
-      map(
-        ids =>
-          new Map(
-            ids.map(id => {
-              const exists = this.pool.get(id);
-              if (exists) {
-                return [id, exists];
-              }
-              const record = this.framework.createEntity(DocRecord, { id });
-              this.pool.set(id, record);
-              return [id, record];
-            })
-          )
-      )
+    combineLatest([
+      // Workspace root doc IDs from Yjs meta.pages
+      this.store.watchDocIds(),
+      // Space doc IDs from all accessible spaces
+      this.spaceService.spacesList$.pipe(
+        switchMap(spaces =>
+          spaces.length === 0
+            ? of([] as string[])
+            : combineLatest(spaces.map(s => s.docIds$)).pipe(
+                map(arrays => arrays.flat())
+              )
+        )
+      ),
+      // Hidden doc IDs (docs in inaccessible spaces)
+      this.spaceService.hiddenDocIds$,
+    ]).pipe(
+      map(([workspaceDocIds, spaceDocIds, hiddenDocIds]) => {
+        const hiddenSet = new Set(hiddenDocIds);
+        // Combine and deduplicate doc IDs
+        const allIds = [...new Set([...workspaceDocIds, ...spaceDocIds])];
+        // Filter out hidden docs
+        const visibleIds = allIds.filter(id => !hiddenSet.has(id));
+        return new Map(
+          visibleIds.map(id => {
+            const exists = this.pool.get(id);
+            if (exists) {
+              return [id, exists];
+            }
+            const record = this.framework.createEntity(DocRecord, { id });
+            this.pool.set(id, record);
+            return [id, record];
+          })
+        );
+      })
     ),
     new Map()
   );
