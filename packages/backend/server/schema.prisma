@@ -379,6 +379,8 @@ model Snapshot {
   @@id([workspaceId, id])
   @@index([workspaceId, updatedAt])
   @@index([workspaceId, spaceId, updatedAt])
+  // Index on docId alone to support cross-workspace doc lookup (for 301 redirects after doc moves)
+  @@index([id])
   @@map("snapshots")
 }
 
@@ -416,6 +418,8 @@ model Update {
 
   @@id([workspaceId, id, createdAt])
   @@index([workspaceId, spaceId, id])
+  // Index on docId alone to support cross-workspace doc lookup (for 301 redirects after doc moves)
+  @@index([id])
   @@map("updates")
 }
 
