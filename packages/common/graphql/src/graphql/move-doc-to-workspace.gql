@@ -1,0 +1,10 @@
+mutation moveDocToWorkspace($input: MoveDocToWorkspaceInput!) {
+  moveDocToWorkspace(input: $input) {
+    success
+    movedDocs {
+      originalDocId
+      newDocId
+    }
+    newWorkspaceId
+  }
+}

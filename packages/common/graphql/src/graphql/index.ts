@@ -2007,6 +2007,21 @@ export const mentionUserMutation = {
 }`,
 };
 
+export const moveDocToWorkspaceMutation = {
+  id: 'moveDocToWorkspaceMutation' as const,
+  op: 'moveDocToWorkspace',
+  query: `mutation moveDocToWorkspace($input: MoveDocToWorkspaceInput!) {
+  moveDocToWorkspace(input: $input) {
+    success
+    movedDocs {
+      originalDocId
+      newDocId
+    }
+    newWorkspaceId
+  }
+}`,
+};
+
 export const notificationCountQuery = {
   id: 'notificationCountQuery' as const,
   op: 'notificationCount',
@@ -2215,6 +2230,150 @@ export const setWorkspacePublicByIdMutation = {
   query: `mutation setWorkspacePublicById($id: ID!, $public: Boolean!) {
   updateWorkspace(input: {id: $id, public: $public}) {
     id
+  }
+}`,
+};
+
+export const createSpaceMutation = {
+  id: 'createSpaceMutation' as const,
+  op: 'createSpace',
+  query: `mutation createSpace($input: CreateSpaceInput!) {
+  createSpace(input: $input) {
+    id
+    workspaceId
+    name
+    description
+    defaultRole
+    createdAt
+    updatedAt
+  }
+}`,
+};
+
+export const deleteSpaceMutation = {
+  id: 'deleteSpaceMutation' as const,
+  op: 'deleteSpace',
+  query: `mutation deleteSpace($workspaceId: String!, $spaceId: String!) {
+  deleteSpace(workspaceId: $workspaceId, spaceId: $spaceId)
+}`,
+};
+
+export const getSpaceQuery = {
+  id: 'getSpaceQuery' as const,
+  op: 'getSpace',
+  query: `query getSpace($workspaceId: String!, $spaceId: String!) {
+  getSpace(workspaceId: $workspaceId, spaceId: $spaceId) {
+    id
+    workspaceId
+    name
+    description
+    defaultRole
+    role
+    createdAt
+    updatedAt
+    permissions {
+      Space_Read
+      Space_Sync
+      Space_CreateDoc
+      Space_Delete
+      Space_Users_Manage
+      Space_Users_Read
+      Space_Settings_Update
+      Space_TransferOwner
+    }
+    owner {
+      id
+      name
+      avatarUrl
+    }
+    docCount
+  }
+}`,
+};
+
+export const grantSpaceUserRoleMutation = {
+  id: 'grantSpaceUserRoleMutation' as const,
+  op: 'grantSpaceUserRole',
+  query: `mutation grantSpaceUserRole($workspaceId: String!, $input: GrantSpaceUserRoleInput!) {
+  grantSpaceUserRole(workspaceId: $workspaceId, input: $input)
+}`,
+};
+
+export const listWorkspaceSpacesQuery = {
+  id: 'listWorkspaceSpacesQuery' as const,
+  op: 'listWorkspaceSpaces',
+  query: `query listWorkspaceSpaces($workspaceId: String!) {
+  workspace(id: $workspaceId) {
+    spaces {
+      id
+      workspaceId
+      name
+      description
+      defaultRole
+      role
+      createdAt
+      updatedAt
+      docCount
+    }
+  }
+}`,
+};
+
+export const getSpaceMembersQuery = {
+  id: 'getSpaceMembersQuery' as const,
+  op: 'getSpaceMembers',
+  query: `query getSpaceMembers($workspaceId: String!, $spaceId: String!, $pagination: PaginationInput!) {
+  getSpace(workspaceId: $workspaceId, spaceId: $spaceId) {
+    members(pagination: $pagination) {
+      totalCount
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+      edges {
+        node {
+          role
+          user {
+            id
+            name
+            email
+            avatarUrl
+          }
+        }
+      }
+    }
+  }
+}`,
+};
+
+export const moveDocToSpaceMutation = {
+  id: 'moveDocToSpaceMutation' as const,
+  op: 'moveDocToSpace',
+  query: `mutation moveDocToSpace($input: MoveDocToSpaceInput!) {
+  moveDocToSpace(input: $input)
+}`,
+};
+
+export const revokeSpaceUserRoleMutation = {
+  id: 'revokeSpaceUserRoleMutation' as const,
+  op: 'revokeSpaceUserRole',
+  query: `mutation revokeSpaceUserRole($workspaceId: String!, $input: RevokeSpaceUserRoleInput!) {
+  revokeSpaceUserRole(workspaceId: $workspaceId, input: $input)
+}`,
+};
+
+export const updateSpaceMutation = {
+  id: 'updateSpaceMutation' as const,
+  op: 'updateSpace',
+  query: `mutation updateSpace($workspaceId: String!, $spaceId: String!, $input: UpdateSpaceInput!) {
+  updateSpace(workspaceId: $workspaceId, spaceId: $spaceId, input: $input) {
+    id
+    workspaceId
+    name
+    description
+    defaultRole
+    createdAt
+    updatedAt
   }
 }`,
 };

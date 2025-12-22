@@ -40,6 +40,12 @@ export type GLOBAL_DIALOG_SCHEMA = {
   'deleted-account': () => void;
 };
 
+export type MoveDocResult = {
+  success: boolean;
+  movedDocs: Array<{ originalDocId: string; newDocId: string }>;
+  newWorkspaceId: string;
+};
+
 export type WORKSPACE_DIALOG_SCHEMA = {
   setting: (props: { activeTab?: SettingTab; scrollAnchor?: string }) => void;
   'doc-info': (props: { docId: string }) => void;
@@ -70,4 +76,5 @@ export type WORKSPACE_DIALOG_SCHEMA = {
     entryId?: string;
     isWorkspaceFile?: boolean;
   };
+  'move-doc': (props: { docId: string }) => MoveDocResult | undefined;
 };

@@ -637,6 +637,14 @@ export interface CreateCopilotPromptInput {
   name: Scalars['String']['input'];
 }
 
+export interface CreateSpaceInput {
+  defaultRole?: InputMaybe<DocRole>;
+  description?: InputMaybe<Scalars['String']['input']>;
+  icon?: InputMaybe<Scalars['String']['input']>;
+  name: Scalars['String']['input'];
+  workspaceId: Scalars['String']['input'];
+}
+
 export interface CreateUserInput {
   email: Scalars['String']['input'];
   name?: InputMaybe<Scalars['String']['input']>;
@@ -1025,6 +1033,12 @@ export interface GrantDocUserRolesInput {
   workspaceId: Scalars['String']['input'];
 }
 
+export interface GrantSpaceUserRoleInput {
+  role: DocRole;
+  spaceId: Scalars['String']['input'];
+  userId: Scalars['String']['input'];
+}
+
 export interface GrantedDocUserType {
   __typename?: 'GrantedDocUserType';
   role: DocRole;
@@ -1035,6 +1049,18 @@ export interface GrantedDocUserTypeEdge {
   __typename?: 'GrantedDocUserTypeEdge';
   cursor: Scalars['String']['output'];
   node: GrantedDocUserType;
+}
+
+export interface GrantedSpaceUserType {
+  __typename?: 'GrantedSpaceUserType';
+  role: DocRole;
+  user: WorkspaceUserType;
+}
+
+export interface GrantedSpaceUserTypeEdge {
+  __typename?: 'GrantedSpaceUserTypeEdge';
+  cursor: Scalars['String']['output'];
+  node: GrantedSpaceUserType;
 }
 
 export interface GraphqlBadRequestDataType {
@@ -1298,6 +1324,12 @@ export interface LimitedUserType {
   hasPassword: Maybe<Scalars['Boolean']['output']>;
 }
 
+/** How to traverse linked documents when moving */
+export enum LinkTraversalMode {
+  Immediate = 'Immediate',
+  Nested = 'Nested',
+}
+
 export interface ListUserInput {
   first?: InputMaybe<Scalars['Int']['input']>;
   skip?: InputMaybe<Scalars['Int']['input']>;
@@ -1368,6 +1400,36 @@ export interface MissingOauthQueryParameterDataType {
   name: Scalars['String']['output'];
 }
 
+export interface MoveDocResultType {
+  __typename?: 'MoveDocResultType';
+  movedDocs: Array<MovedDocMappingType>;
+  newWorkspaceId: Scalars['String']['output'];
+  success: Scalars['Boolean']['output'];
+}
+
+export interface MoveDocToSpaceInput {
+  docId: Scalars['String']['input'];
+  /** Target space ID, null to move to workspace root */
+  spaceId?: InputMaybe<Scalars['String']['input']>;
+  workspaceId: Scalars['String']['input'];
+}
+
+export interface MoveDocToWorkspaceInput {
+  docId: Scalars['String']['input'];
+  linkTraversalMode: LinkTraversalMode;
+  moveLinkedDocs: Scalars['Boolean']['input'];
+  sourceWorkspaceId: Scalars['String']['input'];
+  /** Target space ID in the target workspace, null for workspace root */
+  targetSpaceId?: InputMaybe<Scalars['String']['input']>;
+  targetWorkspaceId: Scalars['String']['input'];
+}
+
+export interface MovedDocMappingType {
+  __typename?: 'MovedDocMappingType';
+  newDocId: Scalars['String']['output'];
+  originalDocId: Scalars['String']['output'];
+}
+
 export interface Mutation {
   __typename?: 'Mutation';
   acceptInviteById: Scalars['Boolean']['output'];
@@ -1410,6 +1472,8 @@ export interface Mutation {
   createInviteLink: InviteLink;
   createReply: ReplyObjectType;
   createSelfhostWorkspaceCustomerPortal: Scalars['String']['output'];
+  /** Create a new space in a workspace */
+  createSpace: SpaceType;
   /** Create a new user */
   createUser: UserType;
   /** Create a new workspace */
@@ -1421,6 +1485,8 @@ export interface Mutation {
   deleteComment: Scalars['Boolean']['output'];
   /** Delete a reply */
   deleteReply: Scalars['Boolean']['output'];
+  /** Delete a space */
+  deleteSpace: Scalars['Boolean']['output'];
   /** Delete a user account */
   deleteUser: DeleteAccount;
   deleteWorkspace: Scalars['Boolean']['output'];
@@ -1432,6 +1498,8 @@ export interface Mutation {
   generateUserAccessToken: RevealedAccessToken;
   grantDocUserRoles: Scalars['Boolean']['output'];
   grantMember: Scalars['Boolean']['output'];
+  /** Grant a user role in a space */
+  grantSpaceUserRole: Scalars['Boolean']['output'];
   /** import users */
   importUsers: Array<UserImportResultType>;
   installLicense: License;
@@ -1441,6 +1509,10 @@ export interface Mutation {
   leaveWorkspace: Scalars['Boolean']['output'];
   /** mention user in a doc */
   mentionUser: Scalars['ID']['output'];
+  /** Move a doc to a space (or to workspace root if spaceId is null) */
+  moveDocToSpace: Scalars['Boolean']['output'];
+  /** Move a document to a different workspace */
+  moveDocToWorkspace: MoveDocResultType;
   publishDoc: DocType;
   /** @deprecated use publishDoc instead */
   publishPage: DocType;
@@ -1481,6 +1553,8 @@ export interface Mutation {
   revokePublicDoc: DocType;
   /** @deprecated use revokePublicDoc instead */
   revokePublicPage: DocType;
+  /** Revoke a user role from a space */
+  revokeSpaceUserRole: Scalars['Boolean']['output'];
   revokeUserAccessToken: Scalars['Boolean']['output'];
   sendChangeEmail: Scalars['Boolean']['output'];
   sendChangePasswordEmail: Scalars['Boolean']['output'];
@@ -1509,6 +1583,8 @@ export interface Mutation {
   updateReply: Scalars['Boolean']['output'];
   /** Update user settings */
   updateSettings: Scalars['Boolean']['output'];
+  /** Update space settings */
+  updateSpace: SpaceType;
   updateSubscriptionRecurring: SubscriptionType;
   /** Update an user */
   updateUser: UserType;
@@ -1642,6 +1718,10 @@ export interface MutationCreateSelfhostWorkspaceCustomerPortalArgs {
   workspaceId: Scalars['String']['input'];
 }
 
+export interface MutationCreateSpaceArgs {
+  input: CreateSpaceInput;
+}
+
 export interface MutationCreateUserArgs {
   input: CreateUserInput;
 }
@@ -1667,6 +1747,11 @@ export interface MutationDeleteCommentArgs {
 
 export interface MutationDeleteReplyArgs {
   id: Scalars['String']['input'];
+}
+
+export interface MutationDeleteSpaceArgs {
+  spaceId: Scalars['String']['input'];
+  workspaceId: Scalars['String']['input'];
 }
 
 export interface MutationDeleteUserArgs {
@@ -1703,6 +1788,11 @@ export interface MutationGrantMemberArgs {
   workspaceId: Scalars['String']['input'];
 }
 
+export interface MutationGrantSpaceUserRoleArgs {
+  input: GrantSpaceUserRoleInput;
+  workspaceId: Scalars['String']['input'];
+}
+
 export interface MutationImportUsersArgs {
   input: ImportUsersInput;
 }
@@ -1731,6 +1821,14 @@ export interface MutationLeaveWorkspaceArgs {
 
 export interface MutationMentionUserArgs {
   input: MentionInput;
+}
+
+export interface MutationMoveDocToSpaceArgs {
+  input: MoveDocToSpaceInput;
+}
+
+export interface MutationMoveDocToWorkspaceArgs {
+  input: MoveDocToWorkspaceInput;
 }
 
 export interface MutationPublishDocArgs {
@@ -1837,6 +1935,11 @@ export interface MutationRevokePublicPageArgs {
   workspaceId: Scalars['String']['input'];
 }
 
+export interface MutationRevokeSpaceUserRoleArgs {
+  input: RevokeSpaceUserRoleInput;
+  workspaceId: Scalars['String']['input'];
+}
+
 export interface MutationRevokeUserAccessTokenArgs {
   id: Scalars['String']['input'];
 }
@@ -1917,6 +2020,12 @@ export interface MutationUpdateReplyArgs {
 
 export interface MutationUpdateSettingsArgs {
   input: UpdateUserSettingsInput;
+}
+
+export interface MutationUpdateSpaceArgs {
+  input: UpdateSpaceInput;
+  spaceId: Scalars['String']['input'];
+  workspaceId: Scalars['String']['input'];
 }
 
 export interface MutationUpdateSubscriptionRecurringArgs {
@@ -2093,6 +2202,13 @@ export interface PaginatedGrantedDocUserType {
   totalCount: Scalars['Int']['output'];
 }
 
+export interface PaginatedGrantedSpaceUserType {
+  __typename?: 'PaginatedGrantedSpaceUserType';
+  edges: Array<GrantedSpaceUserTypeEdge>;
+  pageInfo: PageInfo;
+  totalCount: Scalars['Int']['output'];
+}
+
 export interface PaginatedIgnoredDocsType {
   __typename?: 'PaginatedIgnoredDocsType';
   edges: Array<CopilotWorkspaceIgnoredDocTypeEdge>;
@@ -2103,6 +2219,13 @@ export interface PaginatedIgnoredDocsType {
 export interface PaginatedNotificationObjectType {
   __typename?: 'PaginatedNotificationObjectType';
   edges: Array<NotificationObjectTypeEdge>;
+  pageInfo: PageInfo;
+  totalCount: Scalars['Int']['output'];
+}
+
+export interface PaginatedSpaceType {
+  __typename?: 'PaginatedSpaceType';
+  edges: Array<SpaceTypeEdge>;
   pageInfo: PageInfo;
   totalCount: Scalars['Int']['output'];
 }
@@ -2157,6 +2280,8 @@ export interface Query {
   error: ErrorDataUnion;
   /** get workspace invitation info */
   getInviteInfo: InvitationType;
+  /** Get a space by ID */
+  getSpace: SpaceType;
   /**
    * Get is admin of workspace
    * @deprecated use WorkspaceType[role] instead
@@ -2211,6 +2336,11 @@ export interface QueryErrorArgs {
 
 export interface QueryGetInviteInfoArgs {
   inviteId: Scalars['String']['input'];
+}
+
+export interface QueryGetSpaceArgs {
+  spaceId: Scalars['String']['input'];
+  workspaceId: Scalars['String']['input'];
 }
 
 export interface QueryIsAdminArgs {
@@ -2354,6 +2484,11 @@ export interface RevokeDocUserRoleInput {
   docId: Scalars['String']['input'];
   userId: Scalars['String']['input'];
   workspaceId: Scalars['String']['input'];
+}
+
+export interface RevokeSpaceUserRoleInput {
+  spaceId: Scalars['String']['input'];
+  userId: Scalars['String']['input'];
 }
 
 export interface RuntimeConfigNotFoundDataType {
@@ -2522,9 +2657,57 @@ export interface SpaceOwnerNotFoundDataType {
   spaceId: Scalars['String']['output'];
 }
 
+export interface SpacePermissions {
+  __typename?: 'SpacePermissions';
+  Space_CreateDoc: Scalars['Boolean']['output'];
+  Space_Delete: Scalars['Boolean']['output'];
+  Space_Read: Scalars['Boolean']['output'];
+  Space_Settings_Read: Scalars['Boolean']['output'];
+  Space_Settings_Update: Scalars['Boolean']['output'];
+  Space_Sync: Scalars['Boolean']['output'];
+  Space_TransferOwner: Scalars['Boolean']['output'];
+  Space_Users_Manage: Scalars['Boolean']['output'];
+  Space_Users_Read: Scalars['Boolean']['output'];
+}
+
 export interface SpaceShouldHaveOnlyOneOwnerDataType {
   __typename?: 'SpaceShouldHaveOnlyOneOwnerDataType';
   spaceId: Scalars['String']['output'];
+}
+
+export interface SpaceType {
+  __typename?: 'SpaceType';
+  avatarKey: Maybe<Scalars['String']['output']>;
+  createdAt: Scalars['DateTime']['output'];
+  defaultRole: Scalars['Int']['output'];
+  description: Maybe<Scalars['String']['output']>;
+  /** Number of docs in this space */
+  docCount: Scalars['Int']['output'];
+  /** IDs of docs in this space */
+  docIds: Array<Scalars['String']['output']>;
+  icon: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  /** Paginated list of users with explicit space permissions */
+  members: PaginatedGrantedSpaceUserType;
+  name: Scalars['String']['output'];
+  /** Space owner */
+  owner: Maybe<PublicUserType>;
+  /** Current user permissions in this space */
+  permissions: SpacePermissions;
+  /** Current user role in this space */
+  role: DocRole;
+  updatedAt: Scalars['DateTime']['output'];
+  workspaceId: Scalars['String']['output'];
+}
+
+export interface SpaceTypeMembersArgs {
+  pagination: PaginationInput;
+}
+
+export interface SpaceTypeEdge {
+  __typename?: 'SpaceTypeEdge';
+  cursor: Scalars['String']['output'];
+  node: SpaceType;
 }
 
 export interface StreamObject {
@@ -2691,6 +2874,13 @@ export interface UpdateDocUserRoleInput {
   role: DocRole;
   userId: Scalars['String']['input'];
   workspaceId: Scalars['String']['input'];
+}
+
+export interface UpdateSpaceInput {
+  defaultRole?: InputMaybe<DocRole>;
+  description?: InputMaybe<Scalars['String']['input']>;
+  icon?: InputMaybe<Scalars['String']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
 }
 
 export interface UpdateUserInput {
@@ -2948,6 +3138,8 @@ export interface WorkspaceType {
   enableDocEmbedding: Scalars['Boolean']['output'];
   /** Enable url previous when sharing */
   enableUrlPreview: Scalars['Boolean']['output'];
+  /** Get doc IDs that are hidden from the user (in inaccessible spaces) */
+  hiddenDocIds: Array<Scalars['String']['output']>;
   histories: Array<DocHistoryType>;
   id: Scalars['ID']['output'];
   /** is current workspace initialized */
@@ -2970,6 +3162,8 @@ export interface WorkspaceType {
    * @deprecated use [WorkspaceType.doc] instead
    */
   pageMeta: WorkspaceDocMeta;
+  /** Get paginated spaces in the workspace */
+  paginatedSpaces: PaginatedSpaceType;
   /** map of action permissions */
   permissions: WorkspacePermissions;
   /** is Public workspace */
@@ -2993,6 +3187,10 @@ export interface WorkspaceType {
   search: SearchResultObjectType;
   /** Search docs by keyword */
   searchDocs: Array<SearchDocObjectType>;
+  /** Get a specific space by ID */
+  space: Maybe<SpaceType>;
+  /** Get all accessible spaces in the workspace */
+  spaces: Array<SpaceType>;
   /** The team subscription of the workspace, if exists. */
   subscription: Maybe<SubscriptionType>;
   /** if workspace is team workspace */
@@ -3042,6 +3240,10 @@ export interface WorkspaceTypePageMetaArgs {
   pageId: Scalars['String']['input'];
 }
 
+export interface WorkspaceTypePaginatedSpacesArgs {
+  pagination: PaginationInput;
+}
+
 export interface WorkspaceTypePublicPageArgs {
   pageId: Scalars['String']['input'];
 }
@@ -3056,6 +3258,10 @@ export interface WorkspaceTypeSearchArgs {
 
 export interface WorkspaceTypeSearchDocsArgs {
   input: SearchDocsInput;
+}
+
+export interface WorkspaceTypeSpaceArgs {
+  spaceId: Scalars['String']['input'];
 }
 
 export interface WorkspaceUserType {
@@ -5779,6 +5985,24 @@ export type MentionUserMutation = {
   mentionUser: string;
 };
 
+export type MoveDocToWorkspaceMutationVariables = Exact<{
+  input: MoveDocToWorkspaceInput;
+}>;
+
+export type MoveDocToWorkspaceMutation = {
+  __typename?: 'Mutation';
+  moveDocToWorkspace: {
+    __typename?: 'MoveDocResultType';
+    success: boolean;
+    newWorkspaceId: string;
+    movedDocs: Array<{
+      __typename?: 'MovedDocMappingType';
+      originalDocId: string;
+      newDocId: string;
+    }>;
+  };
+};
+
 export type NotificationCountQueryVariables = Exact<{ [key: string]: never }>;
 
 export type NotificationCountQuery = {
@@ -6005,6 +6229,180 @@ export type SetWorkspacePublicByIdMutationVariables = Exact<{
 export type SetWorkspacePublicByIdMutation = {
   __typename?: 'Mutation';
   updateWorkspace: { __typename?: 'WorkspaceType'; id: string };
+};
+
+export type CreateSpaceMutationVariables = Exact<{
+  input: CreateSpaceInput;
+}>;
+
+export type CreateSpaceMutation = {
+  __typename?: 'Mutation';
+  createSpace: {
+    __typename?: 'SpaceType';
+    id: string;
+    workspaceId: string;
+    name: string;
+    description: string | null;
+    defaultRole: number;
+    createdAt: string;
+    updatedAt: string;
+  };
+};
+
+export type DeleteSpaceMutationVariables = Exact<{
+  workspaceId: Scalars['String']['input'];
+  spaceId: Scalars['String']['input'];
+}>;
+
+export type DeleteSpaceMutation = {
+  __typename?: 'Mutation';
+  deleteSpace: boolean;
+};
+
+export type GetSpaceQueryVariables = Exact<{
+  workspaceId: Scalars['String']['input'];
+  spaceId: Scalars['String']['input'];
+}>;
+
+export type GetSpaceQuery = {
+  __typename?: 'Query';
+  getSpace: {
+    __typename?: 'SpaceType';
+    id: string;
+    workspaceId: string;
+    name: string;
+    description: string | null;
+    defaultRole: number;
+    role: DocRole;
+    createdAt: string;
+    updatedAt: string;
+    docCount: number;
+    permissions: {
+      __typename?: 'SpacePermissions';
+      Space_Read: boolean;
+      Space_Sync: boolean;
+      Space_CreateDoc: boolean;
+      Space_Delete: boolean;
+      Space_Users_Manage: boolean;
+      Space_Users_Read: boolean;
+      Space_Settings_Update: boolean;
+      Space_TransferOwner: boolean;
+    };
+    owner: {
+      __typename?: 'PublicUserType';
+      id: string;
+      name: string;
+      avatarUrl: string | null;
+    } | null;
+  };
+};
+
+export type GrantSpaceUserRoleMutationVariables = Exact<{
+  workspaceId: Scalars['String']['input'];
+  input: GrantSpaceUserRoleInput;
+}>;
+
+export type GrantSpaceUserRoleMutation = {
+  __typename?: 'Mutation';
+  grantSpaceUserRole: boolean;
+};
+
+export type ListWorkspaceSpacesQueryVariables = Exact<{
+  workspaceId: Scalars['String']['input'];
+}>;
+
+export type ListWorkspaceSpacesQuery = {
+  __typename?: 'Query';
+  workspace: {
+    __typename?: 'WorkspaceType';
+    spaces: Array<{
+      __typename?: 'SpaceType';
+      id: string;
+      workspaceId: string;
+      name: string;
+      description: string | null;
+      defaultRole: number;
+      role: DocRole;
+      createdAt: string;
+      updatedAt: string;
+      docCount: number;
+    }>;
+  };
+};
+
+export type GetSpaceMembersQueryVariables = Exact<{
+  workspaceId: Scalars['String']['input'];
+  spaceId: Scalars['String']['input'];
+  pagination: PaginationInput;
+}>;
+
+export type GetSpaceMembersQuery = {
+  __typename?: 'Query';
+  getSpace: {
+    __typename?: 'SpaceType';
+    members: {
+      __typename?: 'PaginatedGrantedSpaceUserType';
+      totalCount: number;
+      pageInfo: {
+        __typename?: 'PageInfo';
+        endCursor: string | null;
+        hasNextPage: boolean;
+      };
+      edges: Array<{
+        __typename?: 'GrantedSpaceUserTypeEdge';
+        node: {
+          __typename?: 'GrantedSpaceUserType';
+          role: DocRole;
+          user: {
+            __typename?: 'WorkspaceUserType';
+            id: string;
+            name: string;
+            email: string;
+            avatarUrl: string | null;
+          };
+        };
+      }>;
+    };
+  };
+};
+
+export type MoveDocToSpaceMutationVariables = Exact<{
+  input: MoveDocToSpaceInput;
+}>;
+
+export type MoveDocToSpaceMutation = {
+  __typename?: 'Mutation';
+  moveDocToSpace: boolean;
+};
+
+export type RevokeSpaceUserRoleMutationVariables = Exact<{
+  workspaceId: Scalars['String']['input'];
+  input: RevokeSpaceUserRoleInput;
+}>;
+
+export type RevokeSpaceUserRoleMutation = {
+  __typename?: 'Mutation';
+  revokeSpaceUserRole: boolean;
+};
+
+export type UpdateSpaceMutationVariables = Exact<{
+  workspaceId: Scalars['String']['input'];
+  spaceId: Scalars['String']['input'];
+  input: UpdateSpaceInput;
+}>;
+
+export type UpdateSpaceMutation = {
+  __typename?: 'Mutation';
+  updateSpace: {
+    __typename?: 'SpaceType';
+    id: string;
+    workspaceId: string;
+    name: string;
+    description: string | null;
+    defaultRole: number;
+    createdAt: string;
+    updatedAt: string;
+  };
 };
 
 export type RefreshSubscriptionMutationVariables = Exact<{
@@ -6711,6 +7109,21 @@ export type Queries =
       response: ServerConfigQuery;
     }
   | {
+      name: 'getSpaceQuery';
+      variables: GetSpaceQueryVariables;
+      response: GetSpaceQuery;
+    }
+  | {
+      name: 'listWorkspaceSpacesQuery';
+      variables: ListWorkspaceSpacesQueryVariables;
+      response: ListWorkspaceSpacesQuery;
+    }
+  | {
+      name: 'getSpaceMembersQuery';
+      variables: GetSpaceMembersQueryVariables;
+      response: GetSpaceMembersQuery;
+    }
+  | {
       name: 'subscriptionQuery';
       variables: SubscriptionQueryVariables;
       response: SubscriptionQuery;
@@ -7058,6 +7471,11 @@ export type Mutations =
       response: MentionUserMutation;
     }
   | {
+      name: 'moveDocToWorkspaceMutation';
+      variables: MoveDocToWorkspaceMutationVariables;
+      response: MoveDocToWorkspaceMutation;
+    }
+  | {
       name: 'publishPageMutation';
       variables: PublishPageMutationVariables;
       response: PublishPageMutation;
@@ -7131,6 +7549,36 @@ export type Mutations =
       name: 'setWorkspacePublicByIdMutation';
       variables: SetWorkspacePublicByIdMutationVariables;
       response: SetWorkspacePublicByIdMutation;
+    }
+  | {
+      name: 'createSpaceMutation';
+      variables: CreateSpaceMutationVariables;
+      response: CreateSpaceMutation;
+    }
+  | {
+      name: 'deleteSpaceMutation';
+      variables: DeleteSpaceMutationVariables;
+      response: DeleteSpaceMutation;
+    }
+  | {
+      name: 'grantSpaceUserRoleMutation';
+      variables: GrantSpaceUserRoleMutationVariables;
+      response: GrantSpaceUserRoleMutation;
+    }
+  | {
+      name: 'moveDocToSpaceMutation';
+      variables: MoveDocToSpaceMutationVariables;
+      response: MoveDocToSpaceMutation;
+    }
+  | {
+      name: 'revokeSpaceUserRoleMutation';
+      variables: RevokeSpaceUserRoleMutationVariables;
+      response: RevokeSpaceUserRoleMutation;
+    }
+  | {
+      name: 'updateSpaceMutation';
+      variables: UpdateSpaceMutationVariables;
+      response: UpdateSpaceMutation;
     }
   | {
       name: 'refreshSubscriptionMutation';

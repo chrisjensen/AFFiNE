@@ -28,6 +28,7 @@ import {
   FilterMinusIcon,
   InformationIcon,
   MoreVerticalIcon,
+  MoveToIcon,
   OpenInNewIcon,
   PlusIcon,
   ResetIcon,
@@ -76,6 +77,7 @@ const PageOperationCellMenuItem = ({
   });
 
   const canMoveToTrash = useGuard('Doc_Trash', page.id);
+  const canMoveDoc = useGuard('Doc_Update', page.id);
   const currentWorkspace = workspaceService.workspace;
   const favourite = useLiveData(favAdapter.isFavorite$(page.id, 'doc'));
   const workbench = workbenchService.workbench;
@@ -155,6 +157,11 @@ const PageOperationCellMenuItem = ({
     });
   }, [duplicate, page.id]);
 
+  const onMoveDoc = useCallback(() => {
+    track.allDocs.list.docMenu.moveDoc();
+    workspaceDialogService.open('move-doc', { docId: page.id });
+  }, [page.id, workspaceDialogService]);
+
   const handleRemoveFromAllowList = useCallback(() => {
     if (onRemoveFromAllowList) {
       onRemoveFromAllowList();
@@ -200,6 +207,14 @@ const PageOperationCellMenuItem = ({
 
       <MenuItem prefixIcon={<DuplicateIcon />} onSelect={onDuplicate}>
         {t['com.affine.header.option.duplicate']()}
+      </MenuItem>
+
+      <MenuItem
+        prefixIcon={<MoveToIcon />}
+        onSelect={onMoveDoc}
+        disabled={!canMoveDoc}
+      >
+        {t['com.affine.moveDoc.menuItem']()}
       </MenuItem>
 
       <MoveToTrash

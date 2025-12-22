@@ -539,6 +539,7 @@ interface PageEvents extends PageDivision {
         'toggleFavorite',
         'openInNewTab',
         'openDocInfo',
+        'moveDoc',
       ];
     };
   };
