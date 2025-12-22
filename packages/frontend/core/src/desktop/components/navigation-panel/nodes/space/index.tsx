@@ -15,6 +15,7 @@ import { DocsService } from '@affine/core/modules/doc';
 import { GlobalContextService } from '@affine/core/modules/global-context';
 import { NavigationPanelService } from '@affine/core/modules/navigation-panel';
 import { type Space, SpaceService } from '@affine/core/modules/space';
+import type { SpaceIconData } from '@affine/core/modules/space/stores/space';
 import { WorkbenchService } from '@affine/core/modules/workbench';
 import type { AffineDNDData } from '@affine/core/types/dnd';
 import { useI18n } from '@affine/i18n';
@@ -49,31 +50,24 @@ const DefaultSpaceIcon: NavigationPanelTreeNodeIcon = ({
   />
 );
 
-// Helper to parse icon string to IconData for rendering
-function parseIconData(icon: string | null | undefined): IconData | null {
+// Convert SpaceIconData to IconData for rendering
+function parseIconData(icon: SpaceIconData): IconData | null {
   if (!icon) return null;
-  // Try to parse as JSON (AffineIcon format)
-  if (icon.startsWith('{')) {
-    try {
-      const parsed = JSON.parse(icon);
-      if (parsed.type === 'affine-icon') {
-        return {
-          type: IconType.AffineIcon,
-          name: parsed.name,
-          color: parsed.color,
-        };
-      }
-    } catch {
-      // Not valid JSON, treat as emoji
-    }
+  if (icon.type === 'emoji') {
+    return { type: IconType.Emoji, unicode: icon.unicode };
+  } else if (icon.type === 'affine-icon') {
+    return {
+      type: IconType.AffineIcon,
+      name: icon.name,
+      color: icon.color,
+    };
   }
-  // Treat as emoji unicode
-  return { type: IconType.Emoji, unicode: icon };
+  return null;
 }
 
 // Create a custom icon component that shows the space's icon or falls back to folder
 const createSpaceIconComponent = (
-  icon: string | null | undefined
+  icon: SpaceIconData | undefined
 ): NavigationPanelTreeNodeIcon => {
   if (!icon) {
     return DefaultSpaceIcon;

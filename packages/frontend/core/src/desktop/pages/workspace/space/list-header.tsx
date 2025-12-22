@@ -1,7 +1,13 @@
 import { IconButton, Menu, MenuItem, toast } from '@affine/component';
+import {
+  type IconData,
+  IconRenderer,
+  IconType,
+} from '@affine/component/ui/icon-picker';
 import { SpaceDeleteModal } from '@affine/core/desktop/dialogs/space-setting/delete-space-modal';
 import { WorkspaceDialogService } from '@affine/core/modules/dialogs';
 import { type Space, SpaceService } from '@affine/core/modules/space';
+import type { SpaceIconData } from '@affine/core/modules/space/stores/space';
 import { WorkbenchLink } from '@affine/core/modules/workbench';
 import { useI18n } from '@affine/i18n';
 import {
@@ -10,10 +16,25 @@ import {
   MoreVerticalIcon,
   SettingsIcon,
 } from '@blocksuite/icons/rc';
-import { useLiveData, useService, useServices } from '@toeverything/infra';
-import { useCallback, useState } from 'react';
+import { useLiveData, useServices } from '@toeverything/infra';
+import { useCallback, useMemo, useState } from 'react';
 
 import * as styles from './list-header.css';
+
+// Convert SpaceIconData to IconData for rendering
+function parseIconData(icon: SpaceIconData): IconData | null {
+  if (!icon) return null;
+  if (icon.type === 'emoji') {
+    return { type: IconType.Emoji, unicode: icon.unicode };
+  } else if (icon.type === 'affine-icon') {
+    return {
+      type: IconType.AffineIcon,
+      name: icon.name,
+      color: icon.color,
+    };
+  }
+  return null;
+}
 
 export const SpaceListHeader = ({ space }: { space: Space }) => {
   const t = useI18n();
@@ -24,6 +45,11 @@ export const SpaceListHeader = ({ space }: { space: Space }) => {
     SpaceService,
   });
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  const iconData = useMemo(
+    () => (spaceIcon ? parseIconData(spaceIcon) : null),
+    [spaceIcon]
+  );
 
   const handleOpenSettings = useCallback(() => {
     workspaceDialogService.open('space-setting', { spaceId: space.id });
@@ -50,8 +76,10 @@ export const SpaceListHeader = ({ space }: { space: Space }) => {
           </div>
           <div className={styles.breadcrumbSeparator}>/</div>
           <div className={styles.breadcrumbItem} data-active={true}>
-            {spaceIcon ? (
-              <span className={styles.spaceIcon}>{spaceIcon}</span>
+            {iconData ? (
+              <span className={styles.spaceIcon}>
+                <IconRenderer data={iconData} />
+              </span>
             ) : (
               <FolderIcon className={styles.breadcrumbIcon} />
             )}

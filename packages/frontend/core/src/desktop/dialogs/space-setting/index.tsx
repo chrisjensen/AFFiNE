@@ -21,7 +21,10 @@ import {
   SpaceMembersService,
   SpaceService,
 } from '@affine/core/modules/space';
-import { DocRole } from '@affine/core/modules/space/stores/space';
+import {
+  DocRole,
+  type SpaceIconData,
+} from '@affine/core/modules/space/stores/space';
 import { useI18n } from '@affine/i18n';
 import { FolderIcon } from '@blocksuite/icons/rc';
 import { useLiveData, useService } from '@toeverything/infra';
@@ -79,7 +82,7 @@ const GeneralTab = ({
 
   const [name, setName] = useState(currentName || '');
   const [description, setDescription] = useState(currentDescription || '');
-  const [icon, setIcon] = useState<string | null>(currentIcon ?? null);
+  const [icon, setIcon] = useState<SpaceIconData>(currentIcon ?? null);
   const [isSaving, setIsSaving] = useState(false);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
 
@@ -95,50 +98,44 @@ const GeneralTab = ({
     }
   }, [currentName, currentDescription, currentIcon]);
 
+  // Compare icon objects by JSON stringification
+  const iconChanged = JSON.stringify(icon) !== JSON.stringify(currentIcon);
   const hasChanges =
     name !== currentName ||
     description !== (currentDescription || '') ||
-    (icon ?? null) !== (currentIcon ?? null);
+    iconChanged;
 
   const handleIconSelect = useCallback((data?: IconData) => {
     if (!data) {
       setIcon(null);
     } else if (data.type === IconType.Emoji) {
-      setIcon(data.unicode);
+      // Store emoji as JSON object
+      setIcon({ type: 'emoji', unicode: data.unicode });
     } else if (data.type === IconType.AffineIcon) {
-      // Store AffineIcon as a JSON string for the backend
-      setIcon(
-        JSON.stringify({
-          type: 'affine-icon',
-          name: data.name,
-          color: data.color,
-        })
-      );
+      // Store AffineIcon as JSON object
+      setIcon({
+        type: 'affine-icon',
+        name: data.name,
+        color: data.color,
+      });
     }
     // Note: IconType.Blob requires upload infrastructure, not supported for spaces yet
     setIconPickerOpen(false);
   }, []);
 
-  // Parse icon string to IconData for rendering
+  // Convert SpaceIconData to IconData for rendering
   const iconData = useMemo((): IconData | null => {
     if (!icon) return null;
-    // Try to parse as JSON (AffineIcon format)
-    if (icon.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(icon);
-        if (parsed.type === 'affine-icon') {
-          return {
-            type: IconType.AffineIcon,
-            name: parsed.name,
-            color: parsed.color,
-          };
-        }
-      } catch {
-        // Not valid JSON, treat as emoji
-      }
+    if (icon.type === 'emoji') {
+      return { type: IconType.Emoji, unicode: icon.unicode };
+    } else if (icon.type === 'affine-icon') {
+      return {
+        type: IconType.AffineIcon,
+        name: icon.name,
+        color: icon.color,
+      };
     }
-    // Treat as emoji unicode
-    return { type: IconType.Emoji, unicode: icon };
+    return null;
   }, [icon]);
 
   const handleSave = useCallback(async () => {
@@ -152,7 +149,7 @@ const GeneralTab = ({
       if (description !== (currentDescription || '')) {
         await space.updateDescription(description);
       }
-      if (icon !== currentIcon) {
+      if (iconChanged) {
         await space.updateIcon(icon);
       }
       onClose();
@@ -168,7 +165,7 @@ const GeneralTab = ({
     description,
     currentDescription,
     icon,
-    currentIcon,
+    iconChanged,
     space,
     onClose,
   ]);

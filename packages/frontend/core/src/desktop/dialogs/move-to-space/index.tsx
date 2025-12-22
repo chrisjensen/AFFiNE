@@ -9,6 +9,7 @@ import type { DialogComponentProps } from '@affine/core/modules/dialogs';
 import type { WORKSPACE_DIALOG_SCHEMA } from '@affine/core/modules/dialogs/constant';
 import { DocsService } from '@affine/core/modules/doc';
 import { SpaceService } from '@affine/core/modules/space';
+import type { SpaceIconData } from '@affine/core/modules/space/stores/space';
 import { useI18n } from '@affine/i18n';
 import { FolderIcon } from '@blocksuite/icons/rc';
 import { useLiveData, useService } from '@toeverything/infra';
@@ -16,31 +17,24 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import * as styles from './style.css';
 
-// Helper to parse icon string to IconData for rendering
-function parseIconData(icon: string | null | undefined): IconData | null {
+// Convert SpaceIconData to IconData for rendering
+function parseIconData(icon: SpaceIconData): IconData | null {
   if (!icon) return null;
-  // Try to parse as JSON (AffineIcon format)
-  if (icon.startsWith('{')) {
-    try {
-      const parsed = JSON.parse(icon);
-      if (parsed.type === 'affine-icon') {
-        return {
-          type: IconType.AffineIcon,
-          name: parsed.name,
-          color: parsed.color,
-        };
-      }
-    } catch {
-      // Not valid JSON, treat as emoji
-    }
+  if (icon.type === 'emoji') {
+    return { type: IconType.Emoji, unicode: icon.unicode };
+  } else if (icon.type === 'affine-icon') {
+    return {
+      type: IconType.AffineIcon,
+      name: icon.name,
+      color: icon.color,
+    };
   }
-  // Treat as emoji unicode
-  return { type: IconType.Emoji, unicode: icon };
+  return null;
 }
 
 // Component to render the space icon
-const SpaceIconDisplay = ({ icon }: { icon: string | null | undefined }) => {
-  const iconData = useMemo(() => parseIconData(icon), [icon]);
+const SpaceIconDisplay = ({ icon }: { icon: SpaceIconData | undefined }) => {
+  const iconData = useMemo(() => (icon ? parseIconData(icon) : null), [icon]);
 
   if (!iconData) {
     return <FolderIcon />;
