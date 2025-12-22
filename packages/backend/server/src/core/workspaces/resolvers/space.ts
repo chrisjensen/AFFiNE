@@ -12,6 +12,8 @@ import {
   ResolveField,
   Resolver,
 } from '@nestjs/graphql';
+import type { Prisma } from '@prisma/client';
+import { GraphQLJSONObject } from 'graphql-scalars';
 
 import {
   paginate,
@@ -21,7 +23,7 @@ import {
   SpaceAccessDenied,
   SpaceNotFound,
 } from '../../../base';
-import { DocRole, Models, Space } from '../../../models';
+import { DocRole, Models } from '../../../models';
 import { CurrentUser } from '../../auth';
 import { AccessController, SPACE_ACTIONS, SpaceAction } from '../../permission';
 import { PublicUserType, WorkspaceUserType } from '../../user';
@@ -49,7 +51,7 @@ const SpacePermissions = registerObjectType<
 );
 
 @ObjectType()
-export class SpaceType implements Partial<Space> {
+export class SpaceType {
   @Field(() => ID)
   id!: string;
 
@@ -65,8 +67,8 @@ export class SpaceType implements Partial<Space> {
   @Field(() => String, { nullable: true })
   avatarKey?: string | null;
 
-  @Field(() => String, { nullable: true })
-  icon?: string | null;
+  @Field(() => GraphQLJSONObject, { nullable: true })
+  icon?: Prisma.JsonValue;
 
   @Field(() => Int)
   defaultRole!: number;
@@ -104,8 +106,8 @@ class CreateSpaceInput {
   @Field(() => String, { nullable: true })
   description?: string;
 
-  @Field(() => String, { nullable: true })
-  icon?: string;
+  @Field(() => GraphQLJSONObject, { nullable: true })
+  icon?: Prisma.InputJsonValue;
 
   @Field(() => DocRole, { nullable: true })
   defaultRole?: DocRole;
@@ -119,8 +121,8 @@ class UpdateSpaceInput {
   @Field(() => String, { nullable: true })
   description?: string;
 
-  @Field(() => String, { nullable: true })
-  icon?: string;
+  @Field(() => GraphQLJSONObject, { nullable: true })
+  icon?: Prisma.InputJsonValue;
 
   @Field(() => DocRole, { nullable: true })
   defaultRole?: DocRole;

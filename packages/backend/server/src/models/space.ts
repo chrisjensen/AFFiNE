@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Transactional } from '@nestjs-cls/transactional';
-import type { WorkspaceSpace } from '@prisma/client';
+import type { Prisma, WorkspaceSpace } from '@prisma/client';
 import {
   Array as YArray,
   Doc as YDoc,
@@ -30,7 +30,7 @@ export interface CreateSpaceInput {
   name: string;
   description?: string;
   avatarKey?: string;
-  icon?: string;
+  icon?: Prisma.InputJsonValue;
   defaultRole?: DocRole;
 }
 
@@ -38,7 +38,7 @@ export interface UpdateSpaceInput {
   name?: string;
   description?: string;
   avatarKey?: string;
-  icon?: string;
+  icon?: Prisma.InputJsonValue;
   defaultRole?: DocRole;
 }
 
