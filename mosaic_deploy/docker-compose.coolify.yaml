@@ -1,11 +1,25 @@
 version: '3.8'
+
+# AFFiNE Docker Compose for Coolify
+# Uses internal Docker registry (not exposed to internet)
+#
+# Required environment variables in Coolify:
+#   - AFFINE_REVISION: Image tag to deploy (e.g., latest or abc1234)
+#   - POSTGRES_PASSWORD: Database password
+#   - AFFINE_SERVER_HOST: Your AFFiNE domain
+#   - AFFINE_SERVER_EXTERNAL_URL: Full external URL (e.g., https://affine.yourdomain.com)
+
 services:
   affine:
-    image: 'ghcr.io/toeverything/affine:${AFFINE_REVISION:-stable}'
+    # Internal registry - accessed by container name
+    image: 'localhost:5000/affine:${AFFINE_REVISION:-latest}'
+    pull_policy: always
     container_name: affine-app
     ports:
       - '${PORT:-3010}:3010'
     depends_on:
+      affine-migration:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       postgres:
@@ -39,6 +53,24 @@ services:
           memory: 2G
         reservations:
           memory: 512M
+
+  # Migration service - runs database migrations before app starts
+  affine-migration:
+    image: 'localhost:5000/affine:${AFFINE_REVISION:-latest}'
+    container_name: affine-migration
+    pull_policy: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - '${CONFIG_LOCATION:-./affine-config}:/root/.affine/config'
+    environment:
+      - NODE_ENV=production
+      - AFFINE_CONFIG_PATH=/root/.affine/config
+      - 'DATABASE_URL=postgres://${POSTGRES_USER:-affine}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-affine}'
+    command: ['node', './scripts/self-host-predeploy.js']
+    restart: 'no'
+
   redis:
     image: 'redis:7-alpine'
     container_name: affine-redis
@@ -69,6 +101,7 @@ services:
           memory: 1G
         reservations:
           memory: 128M
+
   postgres:
     image: 'pgvector/pgvector:pg16'
     container_name: affine-postgres
@@ -95,6 +128,8 @@ services:
       POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
       POSTGRES_DB: '${POSTGRES_DB:-affine}'
       PGDATA: /var/lib/postgresql/data/pgdata
+      # Match official selfhost config - trust mode ignores passwords
+      POSTGRES_HOST_AUTH_METHOD: trust
     healthcheck:
       test:
         - CMD-SHELL
@@ -108,6 +143,7 @@ services:
           memory: 2G
         reservations:
           memory: 256M
+
 volumes:
-  redis-data: null
-  postgres-data: null
+  redis-data:
+  postgres-data:

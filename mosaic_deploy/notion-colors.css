@@ -1,0 +1,92 @@
+/* Notion-style colors for AFFiNE */
+:root,
+[data-theme="light"] {
+  /* Text highlight backgrounds */
+  --affine-text-highlight-grey: #EBECED;
+  --affine-text-highlight-red: #FBE4E4;
+  --affine-text-highlight-orange: #FAEBDD;
+  --affine-text-highlight-yellow: #FBF3DB;
+  --affine-text-highlight-green: #DDEDEA;
+  --affine-text-highlight-teal: #DDEDEA;
+  --affine-text-highlight-blue: #DDEBF1;
+  --affine-text-highlight-purple: #EAE4F2;
+  --affine-text-highlight-pink: #F4DFEB;
+
+  /* Text foreground colors */
+  --affine-text-highlight-foreground-grey: #787774;
+  --affine-text-highlight-foreground-red: #E03E3E;
+  --affine-text-highlight-foreground-orange: #D9730D;
+  --affine-text-highlight-foreground-yellow: #CB912F;
+  --affine-text-highlight-foreground-green: #448361;
+  --affine-text-highlight-foreground-teal: #337EA9;
+  --affine-text-highlight-foreground-blue: #337EA9;
+  --affine-text-highlight-foreground-purple: #9065B0;
+
+  /* Callout backgrounds */
+  --affine-v2-block-callout-background-grey: #F1F1EF;
+  --affine-v2-block-callout-background-red: #FBE4E4;
+  --affine-v2-block-callout-background-orange: #FAEBDD;
+  --affine-v2-block-callout-background-yellow: #FBF3DB;
+  --affine-v2-block-callout-background-green: #DDEDEA;
+  --affine-v2-block-callout-background-teal: #DDEDEA;
+  --affine-v2-block-callout-background-blue: #DDEBF1;
+  --affine-v2-block-callout-background-purple: #EAE4F2;
+  --affine-v2-block-callout-background-magenta: #F4DFEB;
+
+  /* Tag colors (for database properties) */
+  --affine-tag-gray: #E3E2E0;
+  --affine-tag-red: #FBE4E4;
+  --affine-tag-orange: #FAEBDD;
+  --affine-tag-yellow: #FBF3DB;
+  --affine-tag-green: #DDEDEA;
+  --affine-tag-teal: #DDEDEA;
+  --affine-tag-blue: #DDEBF1;
+  --affine-tag-purple: #EAE4F2;
+  --affine-tag-pink: #F4DFEB;
+}
+
+/* Dark mode - Notion dark colors */
+[data-theme="dark"] {
+  /* Text highlight backgrounds */
+  --affine-text-highlight-grey: #454B4E;
+  --affine-text-highlight-red: #594141;
+  --affine-text-highlight-orange: #59473B;
+  --affine-text-highlight-yellow: #564E37;
+  --affine-text-highlight-green: #354C4B;
+  --affine-text-highlight-teal: #354C4B;
+  --affine-text-highlight-blue: #364954;
+  --affine-text-highlight-purple: #443F57;
+  --affine-text-highlight-pink: #533B4C;
+
+  /* Text foreground colors */
+  --affine-text-highlight-foreground-grey: #979A9B;
+  --affine-text-highlight-foreground-red: #FF7369;
+  --affine-text-highlight-foreground-orange: #FFA344;
+  --affine-text-highlight-foreground-yellow: #FFDC49;
+  --affine-text-highlight-foreground-green: #4DAB9A;
+  --affine-text-highlight-foreground-teal: #6AB0C0;
+  --affine-text-highlight-foreground-blue: #6AB0C0;
+  --affine-text-highlight-foreground-purple: #9A6DD7;
+
+  /* Callout backgrounds */
+  --affine-v2-block-callout-background-grey: #2F2F2F;
+  --affine-v2-block-callout-background-red: #4E2E2D;
+  --affine-v2-block-callout-background-orange: #4B3527;
+  --affine-v2-block-callout-background-yellow: #48422A;
+  --affine-v2-block-callout-background-green: #2B4243;
+  --affine-v2-block-callout-background-teal: #2B4243;
+  --affine-v2-block-callout-background-blue: #28404E;
+  --affine-v2-block-callout-background-purple: #3D3354;
+  --affine-v2-block-callout-background-magenta: #4C2F42;
+
+  /* Tag colors */
+  --affine-tag-gray: #454B4E;
+  --affine-tag-red: #594141;
+  --affine-tag-orange: #59473B;
+  --affine-tag-yellow: #564E37;
+  --affine-tag-green: #354C4B;
+  --affine-tag-teal: #354C4B;
+  --affine-tag-blue: #364954;
+  --affine-tag-purple: #443F57;
+  --affine-tag-pink: #533B4C;
+}
