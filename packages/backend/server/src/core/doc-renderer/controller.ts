@@ -10,6 +10,7 @@ import { Models } from '../../models';
 import { htmlSanitize } from '../../native';
 import { Public } from '../auth';
 import { DocReader } from '../doc';
+import { DocMoveService } from '../workspaces/doc-move';
 
 interface RenderOptions {
   title: string;
@@ -52,7 +53,8 @@ export class DocRendererController {
   constructor(
     private readonly doc: DocReader,
     private readonly models: Models,
-    private readonly config: Config
+    private readonly config: Config,
+    private readonly docMoveService: DocMoveService
   ) {
     this.webAssets = this.readHtmlAssets(join(env.projectRoot, 'static'));
     this.mobileAssets = this.readHtmlAssets(
@@ -78,11 +80,28 @@ export class DocRendererController {
     // /:workspaceId/:docId
     if (workspaceId && !staticPaths.has(subPath) && restPaths.length === 0) {
       try {
-        opts =
-          workspaceId === subPath
-            ? await this.getWorkspaceContent(workspaceId)
-            : await this.getPageContent(workspaceId, subPath);
-        metrics.doc.counter('render').add(1);
+        if (workspaceId === subPath) {
+          opts = await this.getWorkspaceContent(workspaceId);
+        } else {
+          opts = await this.getPageContent(workspaceId, subPath);
+          // If page not found in this workspace, check if it was moved
+          if (!opts) {
+            const actualWorkspaceId =
+              await this.docMoveService.findDocWorkspace(subPath);
+            if (actualWorkspaceId && actualWorkspaceId !== workspaceId) {
+              // Document exists in a different workspace - return 301 redirect
+              const redirectUrl = `/workspace/${actualWorkspaceId}/${subPath}`;
+              this.logger.log(
+                `Document ${subPath} moved from ${workspaceId} to ${actualWorkspaceId}, redirecting`
+              );
+              res.redirect(301, redirectUrl);
+              return;
+            }
+          }
+        }
+        if (opts) {
+          metrics.doc.counter('render').add(1);
+        }
       } catch (e) {
         this.logger.error('failed to render page', e);
       }

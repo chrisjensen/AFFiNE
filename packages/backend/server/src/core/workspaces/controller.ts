@@ -17,6 +17,7 @@ import { DocReader } from '../doc/reader';
 import { AccessController } from '../permission';
 import { CommentAttachmentStorage, WorkspaceBlobStorage } from '../storage';
 import { DocID } from '../utils/doc';
+import { DocMoveService } from './doc-move';
 
 @Controller('/api/workspaces')
 export class WorkspacesController {
@@ -27,7 +28,8 @@ export class WorkspacesController {
     private readonly ac: AccessController,
     private readonly workspace: PgWorkspaceDocStorageAdapter,
     private readonly docReader: DocReader,
-    private readonly models: Models
+    private readonly models: Models,
+    private readonly docMoveService: DocMoveService
   ) {}
 
   // get workspace blob
@@ -121,6 +123,21 @@ export class WorkspacesController {
     );
 
     if (!binResponse) {
+      // Check if the document was moved to another workspace (301 redirect)
+      const actualWorkspaceId = await this.docMoveService.findDocWorkspace(
+        docId.guid
+      );
+      if (actualWorkspaceId && actualWorkspaceId !== docId.workspace) {
+        // Document exists in a different workspace - return 301 redirect
+        const redirectUrl = `/api/workspaces/${actualWorkspaceId}/docs/${docId.guid}`;
+        this.logger.log(
+          `Document ${docId.guid} moved from ${docId.workspace} to ${actualWorkspaceId}, redirecting`
+        );
+        res.setHeader('Location', redirectUrl);
+        res.status(301).send();
+        return;
+      }
+
       throw new DocNotFound({
         spaceId: docId.workspace,
         docId: docId.guid,

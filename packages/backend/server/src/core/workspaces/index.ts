@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 
 import { DocStorageModule } from '../doc';
 import { DocRendererModule } from '../doc-renderer';
@@ -10,6 +10,7 @@ import { QuotaModule } from '../quota';
 import { StorageModule } from '../storage';
 import { UserModule } from '../user';
 import { WorkspacesController } from './controller';
+import { DocMoveService } from './doc-move';
 import { WorkspaceEvents } from './event';
 import {
   DocHistoryResolver,
@@ -26,7 +27,7 @@ import { WorkspaceService } from './service';
 @Module({
   imports: [
     DocStorageModule,
-    DocRendererModule,
+    forwardRef(() => DocRendererModule),
     FeatureModule,
     QuotaModule,
     StorageModule,
@@ -47,10 +48,12 @@ import { WorkspaceService } from './service';
     SpaceResolver,
     WorkspaceService,
     WorkspaceEvents,
+    DocMoveService,
   ],
-  exports: [WorkspaceService],
+  exports: [WorkspaceService, DocMoveService],
 })
 export class WorkspaceModule {}
 
+export { DocMoveService } from './doc-move';
 export { WorkspaceService } from './service';
 export { InvitationType, WorkspaceType } from './types';
