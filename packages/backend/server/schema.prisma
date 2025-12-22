@@ -234,7 +234,7 @@ model WorkspaceSpace {
   name        String   @db.VarChar
   description String?  @db.VarChar
   avatarKey   String?  @map("avatar_key") @db.VarChar
-  icon        String?  @db.VarChar(32) // Emoji icon for the space
+  icon        Json?    @db.JsonB // Icon data: {"type":"emoji","unicode":"🚀"} or {"type":"affine-icon","name":"...","color":"..."}
   // Default role for workspace members: External=0, Reader=10, Commenter=15, Editor=20, Manager=30
   defaultRole Int      @default(30) @map("default_role") @db.SmallInt
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)

@@ -525,7 +525,7 @@ input CreateCopilotPromptInput {
 input CreateSpaceInput {
   defaultRole: DocRole
   description: String
-  icon: String
+  icon: JSONObject
   name: String!
   workspaceId: String!
 }
@@ -2004,7 +2004,7 @@ type SpaceType {
 
   """IDs of docs in this space"""
   docIds: [String!]!
-  icon: String
+  icon: JSONObject
   id: ID!
 
   """Paginated list of users with explicit space permissions"""
@@ -2187,7 +2187,7 @@ input UpdateDocUserRoleInput {
 input UpdateSpaceInput {
   defaultRole: DocRole
   description: String
-  icon: String
+  icon: JSONObject
   name: String
 }
 
