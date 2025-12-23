@@ -5,6 +5,7 @@ import {
   IconType,
 } from '@affine/component/ui/icon-picker';
 import type { FilterParams } from '@affine/core/modules/collection-rules';
+import type { DocRecord } from '@affine/core/modules/doc';
 import type { Space } from '@affine/core/modules/space';
 import { SpaceService } from '@affine/core/modules/space';
 import type { SpaceIconData } from '@affine/core/modules/space/stores/space';
@@ -13,6 +14,8 @@ import { FolderIcon } from '@blocksuite/icons/rc';
 import { useLiveData, useService } from '@toeverything/infra';
 import { cssVarV2 } from '@toeverything/theme/v2';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+
+import { StackProperty } from '../explorer/docs-view/stack-property';
 
 // Convert SpaceIconData to IconData for rendering
 function parseIconData(icon: SpaceIconData): IconData | null {
@@ -217,4 +220,27 @@ const SpaceChip = ({ space }: { space: Space }) => {
       {name}
     </span>
   );
+};
+
+// Component to render space in the doc list
+const SpacePropertyDisplay = ({ space }: { space: Space }) => {
+  const name = useLiveData(space.name$);
+  const icon = useLiveData(space.icon$);
+
+  return (
+    <StackProperty icon={<SpaceIconDisplay icon={icon} />}>
+      {name}
+    </StackProperty>
+  );
+};
+
+export const SpaceDocListProperty = ({ doc }: { doc: DocRecord }) => {
+  const spaceService = useService(SpaceService);
+  const space = useLiveData(spaceService.spaceForDoc$(doc.id));
+
+  if (!space) {
+    return null;
+  }
+
+  return <SpacePropertyDisplay space={space} />;
 };
