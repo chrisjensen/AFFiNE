@@ -11,12 +11,18 @@ import {
 import { PaginationInput } from '../base';
 import { BaseModel } from './base';
 
+// Icon format matches frontend SpaceIconData type
+type DocIcon =
+  | { type: 'emoji'; unicode: string }
+  | { type: 'affine-icon'; name: string; color: string };
+
 interface DocMeta {
   id: string;
   title?: string;
   createDate?: number;
   tags?: string[];
   trash?: boolean;
+  icon?: DocIcon;
 }
 
 @Injectable()
@@ -95,17 +101,24 @@ export class SpaceDocModel extends BaseModel {
    * Assign a doc to a container (space or workspace root) and update the root meta.
    * This is a higher-level method that combines addDoc + addDocToRootMeta.
    * Used for cross-workspace moves where we just need to set up the target location.
+   * @param metadata Optional metadata to preserve (title, icon, etc.)
    */
   async assignDocToContainer(
     workspaceId: string,
     docId: string,
-    targetSpaceId: string | null
+    targetSpaceId: string | null,
+    metadata?: Partial<DocMeta>
   ): Promise<void> {
     if (targetSpaceId) {
       await this.addDoc(targetSpaceId, docId);
     }
     const targetContainerId = targetSpaceId ?? workspaceId;
-    await this.addDocToRootMeta(workspaceId, targetContainerId, docId);
+    await this.addDocToRootMeta(
+      workspaceId,
+      targetContainerId,
+      docId,
+      metadata
+    );
   }
 
   /**
@@ -113,11 +126,13 @@ export class SpaceDocModel extends BaseModel {
    * @param workspaceId The workspace ID
    * @param containerId The container ID (space ID or workspace ID for root)
    * @param docId The doc ID to add
+   * @param metadata Optional metadata to preserve (title, icon, etc.)
    */
   async addDocToRootMeta(
     workspaceId: string,
     containerId: string,
-    docId: string
+    docId: string,
+    metadata?: Partial<DocMeta>
   ): Promise<void> {
     this.logger.log(
       `[addDocToRootMeta] Starting: workspaceId=${workspaceId}, containerId=${containerId}, docId=${docId}`
@@ -153,17 +168,17 @@ export class SpaceDocModel extends BaseModel {
 
       // Initialize pages array if needed
       if (!meta.has('pages')) {
-        meta.set('pages', new YArray<DocMeta>());
+        meta.set('pages', new YArray<YMap<unknown>>());
       }
 
-      const pages = meta.get('pages') as YArray<DocMeta>;
+      // Pages array contains YMap items (required for CRDT sync)
+      const pages = meta.get('pages') as YArray<YMap<unknown>>;
 
       // Check if doc already exists in meta.pages
       let exists = false;
       for (let i = 0; i < pages.length; i++) {
         const page = pages.get(i);
-        // Items must be YMap instances for proper CRDT sync
-        if (page instanceof YMap && page.get('id') === docId) {
+        if (page.get('id') === docId) {
           exists = true;
           break;
         }
@@ -174,14 +189,20 @@ export class SpaceDocModel extends BaseModel {
           `[addDocToRootMeta] Doc not in pages, adding. Current pages length: ${pages.length}`
         );
         // Add the doc to meta.pages as a YMap (required for proper CRDT sync)
-        pages.push([
-          new YMap<unknown>([
-            ['id', docId],
-            ['title', ''],
-            ['createDate', Date.now()],
-            ['tags', new YArray()],
-          ]),
+        // Preserve metadata if provided (e.g., when moving documents)
+        const docMap = new YMap<unknown>([
+          ['id', docId],
+          ['title', metadata?.title ?? ''],
+          ['createDate', metadata?.createDate ?? Date.now()],
+          ['tags', new YArray()],
         ]);
+
+        // Preserve icon if provided
+        if (metadata?.icon) {
+          docMap.set('icon', metadata.icon);
+        }
+
+        pages.push([docMap]);
         this.logger.log(
           `[addDocToRootMeta] After push, pages length: ${pages.length}`
         );
@@ -242,7 +263,7 @@ export class SpaceDocModel extends BaseModel {
       applyUpdate(yDoc, snapshot.blob);
 
       const meta = yDoc.getMap('meta') as YMap<unknown>;
-      const pages = meta.get('pages') as YArray<DocMeta> | undefined;
+      const pages = meta.get('pages') as YArray<YMap<unknown>> | undefined;
 
       if (!pages || pages.length === 0) {
         return;
@@ -252,8 +273,7 @@ export class SpaceDocModel extends BaseModel {
       let indexToRemove = -1;
       for (let i = 0; i < pages.length; i++) {
         const page = pages.get(i);
-        // Items must be YMap instances for proper CRDT sync
-        if (page instanceof YMap && page.get('id') === docId) {
+        if (page.get('id') === docId) {
           indexToRemove = i;
           break;
         }
@@ -308,7 +328,7 @@ export class SpaceDocModel extends BaseModel {
     const meta = rootDoc.getMap('meta') as YMap<unknown>;
 
     // Initialize meta structure (similar to workspace root doc)
-    meta.set('pages', new YArray<DocMeta>());
+    meta.set('pages', new YArray<YMap<unknown>>());
     meta.set('name', space.name);
 
     // Encode the document as update
@@ -471,7 +491,7 @@ export class SpaceDocModel extends BaseModel {
       applyUpdate(yDoc, snapshot.blob);
 
       const meta = yDoc.getMap('meta') as YMap<unknown>;
-      const pages = meta.get('pages') as YArray<DocMeta> | undefined;
+      const pages = meta.get('pages') as YArray<YMap<unknown>> | undefined;
 
       if (!pages || pages.length === 0) {
         return false;
@@ -480,7 +500,7 @@ export class SpaceDocModel extends BaseModel {
       // Find the doc in meta.pages and check its trash status
       for (let i = 0; i < pages.length; i++) {
         const page = pages.get(i);
-        if (page instanceof YMap && page.get('id') === docId) {
+        if (page.get('id') === docId) {
           const trash = page.get('trash');
           return trash === true;
         }
@@ -493,6 +513,58 @@ export class SpaceDocModel extends BaseModel {
         error
       );
       return false;
+    }
+  }
+
+  /**
+   * Get the metadata for a doc from the workspace root doc.
+   * @param workspaceId The workspace ID
+   * @param docId The doc ID to get metadata for
+   * @returns The doc metadata including title, icon, etc., or null if not found
+   */
+  async getDocMeta(
+    workspaceId: string,
+    docId: string
+  ): Promise<Partial<DocMeta> | null> {
+    try {
+      // Get the workspace root doc
+      const snapshot = await this.models.doc.get(workspaceId, workspaceId);
+      if (!snapshot) {
+        return null;
+      }
+
+      // Load the Yjs document
+      const yDoc = new YDoc({ guid: workspaceId });
+      applyUpdate(yDoc, snapshot.blob);
+
+      const meta = yDoc.getMap('meta') as YMap<unknown>;
+      const pages = meta.get('pages') as YArray<YMap<unknown>> | undefined;
+
+      if (!pages || pages.length === 0) {
+        return null;
+      }
+
+      // Find the doc in meta.pages and return its metadata
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages.get(i);
+        if (page.get('id') === docId) {
+          const docMeta: Partial<DocMeta> = {
+            id: docId,
+            title: page.get('title') as string | undefined,
+            createDate: page.get('createDate') as number | undefined,
+            icon: page.get('icon') as DocIcon | undefined,
+          };
+          return docMeta;
+        }
+      }
+
+      return null;
+    } catch (error) {
+      this.logger.error(
+        `Failed to get doc meta for doc [${docId}] in workspace [${workspaceId}]`,
+        error
+      );
+      return null;
     }
   }
 }

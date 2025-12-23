@@ -254,15 +254,29 @@ export class DocMoveService {
     // 4. Copy blobs referenced by this document
     await this.copyDocBlobs(sourceWorkspaceId, docId, targetWorkspaceId);
 
-    // 5. Get source space BEFORE modifying SpaceDoc mappings
+    // 5. Get source space and doc metadata BEFORE modifying SpaceDoc mappings
     const sourceSpaceId = await this.models.spaceDoc.getSpaceId(docId);
     const sourceContainerId = sourceSpaceId ?? sourceWorkspaceId;
 
+    // Get doc metadata (including icon) from source to preserve it
+    const docMeta = await this.models.spaceDoc.getDocMeta(
+      sourceWorkspaceId,
+      docId
+    );
+
+    if (!docMeta) {
+      this.logger.warn(
+        `Source doc metadata not found for [${docId}], proceeding without preserved metadata`
+      );
+    }
+
     // 6. Assign doc to target container (space or workspace root)
+    // Pass metadata to preserve icon and other properties
     await this.models.spaceDoc.assignDocToContainer(
       targetWorkspaceId,
       docId,
-      targetSpaceId ?? null
+      targetSpaceId ?? null,
+      docMeta ?? undefined
     );
 
     // 7. Remove from source and delete
