@@ -26,6 +26,7 @@ import {
   FolderIcon,
   InformationIcon,
   LinkedPageIcon,
+  MoveToIcon,
   OpenInNewIcon,
   PlusIcon,
   SplitViewIcon,
@@ -161,6 +162,11 @@ export const useNavigationPanelDocNodeOperations = (
     workspaceDialogService.open('move-to-space', { docId });
   }, [workspaceDialogService, docId]);
 
+  const handleMoveDoc = useCallback(() => {
+    track.$.navigationPanel.docs.moveDoc();
+    workspaceDialogService.open('move-doc', { docId });
+  }, [workspaceDialogService, docId]);
+
   return useMemo(
     () => [
       ...(appSettings.showLinkedDocInSidebar
@@ -271,6 +277,22 @@ export const useNavigationPanelDocNodeOperations = (
         ),
       },
       {
+        index: 201,
+        view: (
+          <Guard docId={docId} permission="Doc_Update">
+            {canEdit => (
+              <MenuItem
+                prefixIcon={<MoveToIcon />}
+                onClick={handleMoveDoc}
+                disabled={!canEdit}
+              >
+                {t['com.affine.moveDoc.menuItem']()}
+              </MenuItem>
+            )}
+          </Guard>
+        ),
+      },
+      {
         index: 9999,
         view: <MenuSeparator key="menu-separator" />,
       },
@@ -299,6 +321,7 @@ export const useNavigationPanelDocNodeOperations = (
       favorite,
       handleAddLinkedPage,
       handleDuplicate,
+      handleMoveDoc,
       handleMoveToSpace,
       handleMoveToTrash,
       handleOpenInNewTab,

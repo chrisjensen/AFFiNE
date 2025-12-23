@@ -367,7 +367,7 @@ interface PageEvents extends PageDivision {
         'toggleFavorite',
         'drop',
       ];
-      docs: ['createDoc', 'deleteDoc', 'linkDoc', 'drop', 'openDoc'];
+      docs: ['createDoc', 'deleteDoc', 'linkDoc', 'drop', 'openDoc', 'moveDoc'];
       collections: [
         'createDoc',
         'addDocToCollection',
@@ -432,6 +432,7 @@ interface PageEvents extends PageDivision {
         'import',
         'toggleFavorite',
         'export',
+        'moveDoc',
       ];
       history: ['open'];
       pageInfo: ['open'];

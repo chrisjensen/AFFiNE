@@ -54,37 +54,9 @@ export const select = style({
   width: '100%',
 });
 
-export const workspaceList = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '4px',
-  maxHeight: '200px',
-  overflowY: 'auto',
-});
-
-export const workspaceItem = style({
-  display: 'flex',
-  alignItems: 'center',
-  padding: '8px 12px',
-  borderRadius: '4px',
-  border: 'none',
-  background: 'transparent',
-  cursor: 'pointer',
-  fontSize: cssVar('fontBase'),
-  lineHeight: '22px',
-  color: cssVarV2('text/primary'),
-  textAlign: 'left',
+export const workspaceSelectButton = style({
   width: '100%',
-  transition: 'background-color 0.2s',
-  selectors: {
-    '&:hover': {
-      backgroundColor: cssVarV2('layer/background/hoverOverlay'),
-    },
-    '&[data-selected="true"]': {
-      backgroundColor: cssVarV2('layer/background/secondary'),
-      fontWeight: 500,
-    },
-  },
+  justifyContent: 'flex-start',
 });
 
 export const spaceSelectSection = style({
