@@ -46,6 +46,7 @@ type DocEvents =
   | 'linkDoc'
   | 'deleteDoc'
   | 'restoreDoc'
+  | 'moveDoc'
   | 'switchPageMode'
   | 'openDocOptionsMenu'
   | 'openDocInfo'

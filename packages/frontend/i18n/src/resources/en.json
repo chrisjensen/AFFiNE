@@ -718,7 +718,7 @@
   "com.affine.moveToTrash.confirmModal.title": "Delete doc?",
   "com.affine.moveToTrash.confirmModal.title.multiple": "Delete {{ number }} docs?",
   "com.affine.moveToTrash.title": "Move to trash",
-  "com.affine.moveDoc.menuItem": "Move...",
+  "com.affine.moveDoc.menuItem": "Move Document",
   "com.affine.moveDoc.title": "Move Document",
   "com.affine.moveDoc.targetWorkspace": "Target Workspace",
   "com.affine.moveDoc.targetSpace": "Target Space (optional)",

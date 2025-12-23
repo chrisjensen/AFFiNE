@@ -5,7 +5,6 @@ import {
   toast,
   useConfirmModal,
 } from '@affine/component';
-import { usePageHelper } from '@affine/core/blocksuite/block-suite-page-list/utils';
 import { Guard } from '@affine/core/components/guard';
 import { useAppSettingHelper } from '@affine/core/components/hooks/affine/use-app-setting-helper';
 import { useBlockSuiteMetaHelper } from '@affine/core/components/hooks/affine/use-block-suite-meta-helper';
@@ -17,13 +16,11 @@ import { CompatibleFavoriteItemsAdapter } from '@affine/core/modules/favorite';
 import { GuardService } from '@affine/core/modules/permissions';
 import { SpaceService } from '@affine/core/modules/space';
 import { WorkbenchService } from '@affine/core/modules/workbench';
-import { WorkspaceService } from '@affine/core/modules/workspace';
 import { useI18n } from '@affine/i18n';
 import { track } from '@affine/track';
 import {
   DeleteIcon,
   DuplicateIcon,
-  FolderIcon,
   InformationIcon,
   LinkedPageIcon,
   MoveToIcon,
@@ -46,7 +43,6 @@ export const useNavigationPanelDocNodeOperations = (
   const t = useI18n();
   const {
     workbenchService,
-    workspaceService,
     docsService,
     compatibleFavoriteItemsAdapter,
     guardService,
@@ -55,7 +51,6 @@ export const useNavigationPanelDocNodeOperations = (
   } = useServices({
     DocsService,
     WorkbenchService,
-    WorkspaceService,
     CompatibleFavoriteItemsAdapter,
     GuardService,
     WorkspaceDialogService,
@@ -157,10 +152,6 @@ export const useNavigationPanelDocNodeOperations = (
       type: 'doc',
     });
   }, [docId, compatibleFavoriteItemsAdapter]);
-
-  const handleMoveToSpace = useCallback(() => {
-    workspaceDialogService.open('move-to-space', { docId });
-  }, [workspaceDialogService, docId]);
 
   const handleMoveDoc = useCallback(() => {
     track.$.navigationPanel.docs.moveDoc();
@@ -266,22 +257,6 @@ export const useNavigationPanelDocNodeOperations = (
           <Guard docId={docId} permission="Doc_Update">
             {canEdit => (
               <MenuItem
-                prefixIcon={<FolderIcon />}
-                onClick={handleMoveToSpace}
-                disabled={!canEdit}
-              >
-                {t['com.affine.space.moveToSpace']?.() || 'Move to Space...'}
-              </MenuItem>
-            )}
-          </Guard>
-        ),
-      },
-      {
-        index: 201,
-        view: (
-          <Guard docId={docId} permission="Doc_Update">
-            {canEdit => (
-              <MenuItem
                 prefixIcon={<MoveToIcon />}
                 onClick={handleMoveDoc}
                 disabled={!canEdit}
@@ -322,7 +297,6 @@ export const useNavigationPanelDocNodeOperations = (
       handleAddLinkedPage,
       handleDuplicate,
       handleMoveDoc,
-      handleMoveToSpace,
       handleMoveToTrash,
       handleOpenInNewTab,
       handleOpenInSplitView,
