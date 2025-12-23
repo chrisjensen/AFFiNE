@@ -1,8 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Transactional } from '@nestjs-cls/transactional';
+import { applyUpdate, Doc as YDoc, Map as YMap } from 'yjs';
 
+import { DocIsInTrash } from '../../base/error';
 import { Models } from '../../models';
 import { AccessController } from '../permission';
+import { WorkspaceBlobStorage } from '../storage';
 
 export interface MoveDocToWorkspaceInput {
   sourceWorkspaceId: string;
@@ -30,7 +33,8 @@ export class DocMoveService {
 
   constructor(
     private readonly ac: AccessController,
-    private readonly models: Models
+    private readonly models: Models,
+    private readonly blobStorage: WorkspaceBlobStorage
   ) {}
 
   /**
@@ -63,7 +67,10 @@ export class DocMoveService {
       `Moving ${docsToMove.length} documents from workspace ${sourceWorkspaceId} to ${targetWorkspaceId}`
     );
 
-    // 2. Pre-validate all permissions (fail fast)
+    // 2. Check that no documents are in trash
+    await this.validateNotInTrash(sourceWorkspaceId, docsToMove);
+
+    // 3. Pre-validate all permissions (fail fast)
     await this.validatePermissions(
       userId,
       sourceWorkspaceId,
@@ -71,7 +78,7 @@ export class DocMoveService {
       docsToMove
     );
 
-    // 3. Execute move for each doc (preserving doc IDs)
+    // 4. Execute move for each doc (preserving doc IDs)
     const movedDocs: MovedDocMapping[] = [];
 
     for (const docIdToMove of docsToMove) {
@@ -178,6 +185,25 @@ export class DocMoveService {
   }
 
   /**
+   * Validate that none of the documents are in trash.
+   * Documents must be restored from trash before they can be moved.
+   */
+  private async validateNotInTrash(
+    workspaceId: string,
+    docIds: string[]
+  ): Promise<void> {
+    for (const docId of docIds) {
+      const isInTrash = await this.models.spaceDoc.isDocInTrash(
+        workspaceId,
+        docId
+      );
+      if (isInTrash) {
+        throw new DocIsInTrash({ docId });
+      }
+    }
+  }
+
+  /**
    * Move a single document from source to target workspace.
    * Preserves the document ID for external link compatibility.
    * Optionally assigns the doc to a space in the target workspace.
@@ -250,19 +276,119 @@ export class DocMoveService {
 
   /**
    * Copy all blobs referenced by a document to the target workspace.
-   * TODO: Implement proper blob extraction from Y.Doc content.
-   * For now, this is a no-op - blob copying will be added in a follow-up PR.
+   * Extracts blob IDs from Y.Doc content and copies each blob.
    */
   private async copyDocBlobs(
-    _sourceWorkspaceId: string,
-    _docId: string,
-    _targetWorkspaceId: string
+    sourceWorkspaceId: string,
+    docId: string,
+    targetWorkspaceId: string
   ): Promise<void> {
-    // Blob extraction requires parsing Y.Doc content to find blob references.
-    // This is complex and will be implemented in a follow-up PR.
-    // For MVP, documents are moved without their blobs.
-    // Users will need to re-upload images/attachments if needed.
-    this.logger.debug('Blob copying not yet implemented - skipping');
+    // Skip if moving within same workspace
+    if (sourceWorkspaceId === targetWorkspaceId) {
+      return;
+    }
+
+    try {
+      // Get the document snapshot
+      const snapshot = await this.models.doc.get(sourceWorkspaceId, docId);
+      if (!snapshot?.blob) {
+        return;
+      }
+
+      // Extract blob IDs from the document content
+      const blobIds = this.extractBlobIds(snapshot.blob);
+
+      if (blobIds.size === 0) {
+        this.logger.debug(`No blobs found in doc ${docId}`);
+        return;
+      }
+
+      this.logger.log(
+        `Copying ${blobIds.size} blobs from workspace ${sourceWorkspaceId} to ${targetWorkspaceId}`
+      );
+
+      // Copy each blob to target workspace
+      for (const blobId of blobIds) {
+        await this.copyBlob(sourceWorkspaceId, targetWorkspaceId, blobId);
+      }
+    } catch (error) {
+      // Log but don't fail the move if blob copying fails
+      this.logger.warn(`Failed to copy blobs for doc ${docId}: ${error}`);
+    }
+  }
+
+  /**
+   * Extract blob IDs from a Y.Doc binary.
+   * Looks for sourceId properties in affine:image and affine:attachment blocks.
+   */
+  private extractBlobIds(docBinary: Uint8Array): Set<string> {
+    const blobIds = new Set<string>();
+
+    try {
+      const doc = new YDoc();
+      applyUpdate(doc, docBinary);
+
+      // Check if this is a page doc with blocks
+      if (!doc.share.has('blocks')) {
+        return blobIds;
+      }
+
+      const blocks = doc.getMap<YMap<unknown>>('blocks');
+
+      for (const block of blocks.values()) {
+        const flavour = block.get('sys:flavour') as string;
+
+        // Check for blocks that can have blob references
+        if (flavour === 'affine:image' || flavour === 'affine:attachment') {
+          const sourceId = block.get('prop:sourceId') as string | undefined;
+          if (sourceId && sourceId.length > 0) {
+            blobIds.add(sourceId);
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.warn(`Failed to extract blob IDs: ${error}`);
+    }
+
+    return blobIds;
+  }
+
+  /**
+   * Copy a single blob from source to target workspace.
+   */
+  private async copyBlob(
+    sourceWorkspaceId: string,
+    targetWorkspaceId: string,
+    blobId: string
+  ): Promise<void> {
+    try {
+      const blobData = await this.blobStorage.get(sourceWorkspaceId, blobId);
+
+      if (!blobData?.body) {
+        this.logger.debug(
+          `Blob ${blobId} not found in workspace ${sourceWorkspaceId}`
+        );
+        return;
+      }
+
+      // Read the blob data
+      const chunks: Buffer[] = [];
+      for await (const chunk of blobData.body) {
+        chunks.push(Buffer.from(chunk));
+      }
+      const buffer = Buffer.concat(chunks);
+
+      // Write to target workspace
+      await this.blobStorage.put(targetWorkspaceId, blobId, buffer);
+
+      this.logger.debug(
+        `Copied blob ${blobId} to workspace ${targetWorkspaceId}`
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Failed to copy blob ${blobId} from ${sourceWorkspaceId} to ${targetWorkspaceId}: ${error}`
+      );
+    }
   }
 
   /**

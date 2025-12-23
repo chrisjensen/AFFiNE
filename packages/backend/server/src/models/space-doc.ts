@@ -16,6 +16,7 @@ interface DocMeta {
   title?: string;
   createDate?: number;
   tags?: string[];
+  trash?: boolean;
 }
 
 @Injectable()
@@ -449,5 +450,49 @@ export class SpaceDocModel extends BaseModel {
       }),
       this.count(spaceId),
     ]);
+  }
+
+  /**
+   * Check if a doc is in trash by looking at its meta in the workspace root doc.
+   * @param workspaceId The workspace ID
+   * @param docId The doc ID to check
+   * @returns true if the doc is in trash, false otherwise
+   */
+  async isDocInTrash(workspaceId: string, docId: string): Promise<boolean> {
+    try {
+      // Get the workspace root doc
+      const snapshot = await this.models.doc.get(workspaceId, workspaceId);
+      if (!snapshot) {
+        return false;
+      }
+
+      // Load the Yjs document
+      const yDoc = new YDoc({ guid: workspaceId });
+      applyUpdate(yDoc, snapshot.blob);
+
+      const meta = yDoc.getMap('meta') as YMap<unknown>;
+      const pages = meta.get('pages') as YArray<DocMeta> | undefined;
+
+      if (!pages || pages.length === 0) {
+        return false;
+      }
+
+      // Find the doc in meta.pages and check its trash status
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages.get(i);
+        if (page instanceof YMap && page.get('id') === docId) {
+          const trash = page.get('trash');
+          return trash === true;
+        }
+      }
+
+      return false;
+    } catch (error) {
+      this.logger.error(
+        `Failed to check trash status for doc [${docId}] in workspace [${workspaceId}]`,
+        error
+      );
+      return false;
+    }
   }
 }

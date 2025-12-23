@@ -477,6 +477,12 @@ export const USER_FRIENDLY_ERRORS = {
     message: ({ docId, action }) =>
       `You do not have permission to perform ${action} action on doc ${docId}.`,
   },
+  doc_is_in_trash: {
+    type: 'action_forbidden',
+    args: { docId: 'string' },
+    message: ({ docId }) =>
+      `Document ${docId} is in trash. Restore it first to move it.`,
+  },
   doc_update_blocked: {
     type: 'action_forbidden',
     args: { spaceId: 'string', docId: 'string' },
