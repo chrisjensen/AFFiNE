@@ -49,7 +49,7 @@ import {
   PageWidthGroupHeader,
 } from './page-width';
 import { SharedFilterValue } from './shared';
-import { SpaceFilterValue } from './space';
+import { SpaceDocListProperty, SpaceFilterValue } from './space';
 import { TagsDocListProperty, TagsFilterValue, TagsGroupHeader } from './tags';
 import {
   TemplateDocListProperty,
@@ -217,6 +217,8 @@ export const SystemPropertyTypes = {
   space: {
     icon: FolderIcon,
     name: 'com.affine.space.space',
+    showInDocList: 'stack',
+    docListProperty: SpaceDocListProperty,
     filterMethod: {
       is: 'com.affine.editCollection.rules.include.is',
       'is-not': 'com.affine.editCollection.rules.include.is-not',
