@@ -28,15 +28,75 @@ export class StaticCloudDocStorage extends DocStorageBase<CloudDocStorageOptions
     return { docId: update.docId, timestamp: new Date() };
   }
   override async getDocTimestamp(docId: string): Promise<DocClock | null> {
-    // http doesn't support this, so we just return a new timestamp
-    return {
-      docId,
-      timestamp: new Date(),
-    };
+    try {
+      const response = await this.connection.fetch(
+        `/api/workspaces/${this.spaceId}/docs/${docId}`,
+        {
+          method: 'HEAD', // Only need headers, not body
+          headers: {
+            Accept: 'application/octet-stream',
+          },
+        }
+      );
+
+      if (response.status === 404) {
+        return null;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Failed to get doc timestamp: ${response.statusText}`);
+      }
+
+      const timestampHeader = response.headers.get('x-doc-timestamp');
+      if (!timestampHeader) {
+        // Fallback: return current time if header not present
+        return {
+          docId,
+          timestamp: new Date(),
+        };
+      }
+
+      return {
+        docId,
+        timestamp: new Date(parseInt(timestampHeader, 10)),
+      };
+    } catch (error) {
+      console.error('Failed to get doc timestamp:', error);
+      return null;
+    }
   }
-  override async getDocTimestamps(): Promise<DocClocks> {
-    // http doesn't support this
-    return {};
+  override async getDocTimestamps(after?: Date): Promise<DocClocks> {
+    try {
+      const url = `/api/workspaces/${this.spaceId}/doc-timestamps${
+        after ? `?after=${after.getTime()}` : ''
+      }`;
+
+      const response = await this.connection.fetch(url, {
+        headers: {
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return {};
+        }
+        throw new Error(
+          `Failed to fetch doc timestamps: ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+
+      // Convert timestamps from numbers to Date objects
+      return Object.entries(data).reduce((ret, [docId, timestamp]) => {
+        ret[docId] = new Date(timestamp as number);
+        return ret;
+      }, {} as DocClocks);
+    } catch (error) {
+      console.error('Failed to get doc timestamps:', error);
+      return {};
+    }
   }
   override deleteDoc(_docId: string): Promise<void> {
     // http is readonly
