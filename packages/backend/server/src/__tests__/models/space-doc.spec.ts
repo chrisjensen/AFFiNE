@@ -76,7 +76,7 @@ async function getMetaPages(
   applyUpdate(yDoc, snapshot.blob);
 
   const meta = yDoc.getMap('meta') as YMap<unknown>;
-  const pages = meta.get('pages') as YArray<DocMeta> | undefined;
+  const pages = meta.get('pages') as YArray<YMap<unknown>> | undefined;
 
   if (!pages) {
     return [];
@@ -84,7 +84,19 @@ async function getMetaPages(
 
   const result: DocMeta[] = [];
   for (let i = 0; i < pages.length; i++) {
-    result.push(pages.get(i));
+    const page = pages.get(i);
+    // Handle both YMap items (from addDocToRootMeta) and plain objects
+    if (page instanceof YMap) {
+      result.push({
+        id: page.get('id') as string,
+        title: page.get('title') as string | undefined,
+        createDate: page.get('createDate') as number | undefined,
+        tags: page.get('tags') as string[] | undefined,
+      });
+    } else {
+      // Fallback for plain objects
+      result.push(page as unknown as DocMeta);
+    }
   }
   return result;
 }
@@ -142,10 +154,10 @@ test('space creation should create root doc with empty meta.pages', async t => {
 });
 
 // =============================================================================
-// addDocToRootMeta Tests
+// SpaceDoc Table Tests - The new single source of truth
 // =============================================================================
 
-test('addDocToRootMeta should add doc to space root meta.pages', async t => {
+test('addDoc should add doc to SpaceDoc table', async t => {
   const user = await t.context.user.create({ email: 'test@affine.pro' });
   const workspace = await t.context.workspace.create(user.id);
   const space = await t.context.space.create(user.id, {
@@ -153,17 +165,16 @@ test('addDocToRootMeta should add doc to space root meta.pages', async t => {
     name: 'Test Space',
   });
 
-  // Add a doc to the space's root meta.pages
+  // Add a doc to the space
   const docId = 'test-doc-id';
-  await t.context.spaceDoc.addDocToRootMeta(workspace.id, space.id, docId);
+  await t.context.spaceDoc.addDoc(space.id, docId);
 
-  // Verify the doc was added to meta.pages
-  const pages = await getMetaPages(t.context.doc, workspace.id, space.id);
-  t.is(pages.length, 1, 'Should have 1 doc in meta.pages');
-  t.is(pages[0].id, docId, 'Doc ID should match');
+  // Verify the doc was added to SpaceDoc table
+  const docIds = await t.context.spaceDoc.list(space.id);
+  t.true(docIds.includes(docId), 'SpaceDoc table should contain the doc');
 });
 
-test('addDocToRootMeta should not duplicate doc in meta.pages', async t => {
+test('addDoc should not duplicate doc in SpaceDoc table', async t => {
   const user = await t.context.user.create({ email: 'test@affine.pro' });
   const workspace = await t.context.workspace.create(user.id);
   const space = await t.context.space.create(user.id, {
@@ -174,15 +185,16 @@ test('addDocToRootMeta should not duplicate doc in meta.pages', async t => {
   const docId = 'test-doc-id';
 
   // Add the same doc twice
-  await t.context.spaceDoc.addDocToRootMeta(workspace.id, space.id, docId);
-  await t.context.spaceDoc.addDocToRootMeta(workspace.id, space.id, docId);
+  await t.context.spaceDoc.addDoc(space.id, docId);
+  await t.context.spaceDoc.addDoc(space.id, docId);
 
   // Verify the doc was only added once
-  const pages = await getMetaPages(t.context.doc, workspace.id, space.id);
-  t.is(pages.length, 1, 'Should have only 1 doc in meta.pages (no duplicates)');
+  const docIds = await t.context.spaceDoc.list(space.id);
+  const count = docIds.filter(id => id === docId).length;
+  t.is(count, 1, 'Should have only 1 doc in SpaceDoc table (no duplicates)');
 });
 
-test('addDocToRootMeta should add multiple docs to meta.pages', async t => {
+test('addDoc should add multiple docs to SpaceDoc table', async t => {
   const user = await t.context.user.create({ email: 'test@affine.pro' });
   const workspace = await t.context.workspace.create(user.id);
   const space = await t.context.space.create(user.id, {
@@ -191,25 +203,104 @@ test('addDocToRootMeta should add multiple docs to meta.pages', async t => {
   });
 
   // Add multiple docs
-  await t.context.spaceDoc.addDocToRootMeta(workspace.id, space.id, 'doc-1');
-  await t.context.spaceDoc.addDocToRootMeta(workspace.id, space.id, 'doc-2');
-  await t.context.spaceDoc.addDocToRootMeta(workspace.id, space.id, 'doc-3');
+  await t.context.spaceDoc.addDoc(space.id, 'doc-1');
+  await t.context.spaceDoc.addDoc(space.id, 'doc-2');
+  await t.context.spaceDoc.addDoc(space.id, 'doc-3');
 
   // Verify all docs were added
-  const pages = await getMetaPages(t.context.doc, workspace.id, space.id);
-  t.is(pages.length, 3, 'Should have 3 docs in meta.pages');
-
-  const docIds = pages.map(p => p.id);
+  const docIds = await t.context.spaceDoc.list(space.id);
+  t.is(docIds.length, 3, 'Should have 3 docs in SpaceDoc table');
   t.true(docIds.includes('doc-1'));
   t.true(docIds.includes('doc-2'));
   t.true(docIds.includes('doc-3'));
+});
+
+test('removeDoc should remove doc from SpaceDoc table', async t => {
+  const user = await t.context.user.create({ email: 'test@affine.pro' });
+  const workspace = await t.context.workspace.create(user.id);
+  const space = await t.context.space.create(user.id, {
+    workspaceId: workspace.id,
+    name: 'Test Space',
+  });
+
+  // Add docs first
+  await t.context.spaceDoc.addDoc(space.id, 'doc-1');
+  await t.context.spaceDoc.addDoc(space.id, 'doc-2');
+
+  // Verify both docs exist
+  let docIds = await t.context.spaceDoc.list(space.id);
+  t.is(docIds.length, 2, 'Should have 2 docs initially');
+
+  // Remove one doc
+  await t.context.spaceDoc.removeDoc(space.id, 'doc-1');
+
+  // Verify only one doc remains
+  docIds = await t.context.spaceDoc.list(space.id);
+  t.is(docIds.length, 1, 'Should have 1 doc after removal');
+  t.true(docIds.includes('doc-2'), 'Remaining doc should be doc-2');
+});
+
+test('removeDoc should handle non-existent doc gracefully', async t => {
+  const user = await t.context.user.create({ email: 'test@affine.pro' });
+  const workspace = await t.context.workspace.create(user.id);
+  const space = await t.context.space.create(user.id, {
+    workspaceId: workspace.id,
+    name: 'Test Space',
+  });
+
+  // Try to remove a non-existent doc
+  await t.notThrowsAsync(async () => {
+    await t.context.spaceDoc.removeDoc(space.id, 'non-existent-doc');
+  });
+});
+
+// =============================================================================
+// addDocToRootMeta Tests - Now only updates workspace.meta.pages
+// =============================================================================
+
+test('addDocToRootMeta should skip space.meta.pages updates', async t => {
+  const user = await t.context.user.create({ email: 'test@affine.pro' });
+  const workspace = await t.context.workspace.create(user.id);
+  const space = await t.context.space.create(user.id, {
+    workspaceId: workspace.id,
+    name: 'Test Space',
+  });
+
+  // Add a doc to the space's root meta.pages (should be skipped)
+  const docId = 'test-doc-id';
+  await t.context.spaceDoc.addDocToRootMeta(workspace.id, space.id, docId);
+
+  // Verify the doc was NOT added to space.meta.pages (it skips space updates now)
+  const pages = await getMetaPages(t.context.doc, workspace.id, space.id);
+  t.is(
+    pages.length,
+    0,
+    'Space meta.pages should remain empty (space updates are skipped)'
+  );
+});
+
+test('addDocToRootMeta should update workspace.meta.pages', async t => {
+  const user = await t.context.user.create({ email: 'test@affine.pro' });
+  const workspace = await t.context.workspace.create(user.id);
+
+  // Create workspace root doc first
+  await createWorkspaceRootDoc(t.context.doc, workspace.id);
+
+  // Add a doc to workspace.meta.pages
+  const docId = 'test-doc-id';
+  await t.context.spaceDoc.addDocToRootMeta(workspace.id, workspace.id, docId);
+
+  // Verify the doc was added to workspace.meta.pages
+  const pages = await getMetaPages(t.context.doc, workspace.id, workspace.id);
+  t.is(pages.length, 1, 'Workspace meta.pages should have 1 doc');
+  t.is(pages[0].id, docId, 'Doc ID should match');
 });
 
 test('addDocToRootMeta should handle non-existent container gracefully', async t => {
   const user = await t.context.user.create({ email: 'test@affine.pro' });
   const workspace = await t.context.workspace.create(user.id);
 
-  // Try to add a doc to a non-existent space
+  // Try to add a doc to a non-existent space (should not throw)
   await t.notThrowsAsync(async () => {
     await t.context.spaceDoc.addDocToRootMeta(
       workspace.id,
@@ -220,10 +311,10 @@ test('addDocToRootMeta should handle non-existent container gracefully', async t
 });
 
 // =============================================================================
-// removeDocFromRootMeta Tests
+// removeDocFromRootMeta Tests - Now only updates workspace.meta.pages
 // =============================================================================
 
-test('removeDocFromRootMeta should remove doc from space root meta.pages', async t => {
+test('removeDocFromRootMeta should skip space.meta.pages updates', async t => {
   const user = await t.context.user.create({ email: 'test@affine.pro' });
   const workspace = await t.context.workspace.create(user.id);
   const space = await t.context.space.create(user.id, {
@@ -231,56 +322,30 @@ test('removeDocFromRootMeta should remove doc from space root meta.pages', async
     name: 'Test Space',
   });
 
-  // Add docs first
-  await t.context.spaceDoc.addDocToRootMeta(workspace.id, space.id, 'doc-1');
-  await t.context.spaceDoc.addDocToRootMeta(workspace.id, space.id, 'doc-2');
-
-  // Verify both docs exist
-  let pages = await getMetaPages(t.context.doc, workspace.id, space.id);
-  t.is(pages.length, 2, 'Should have 2 docs initially');
-
-  // Remove one doc
-  await t.context.spaceDoc.removeDocFromRootMeta(
-    workspace.id,
-    space.id,
-    'doc-1'
-  );
-
-  // Verify only one doc remains
-  pages = await getMetaPages(t.context.doc, workspace.id, space.id);
-  t.is(pages.length, 1, 'Should have 1 doc after removal');
-  t.is(pages[0].id, 'doc-2', 'Remaining doc should be doc-2');
-});
-
-test('removeDocFromRootMeta should handle non-existent doc gracefully', async t => {
-  const user = await t.context.user.create({ email: 'test@affine.pro' });
-  const workspace = await t.context.workspace.create(user.id);
-  const space = await t.context.space.create(user.id, {
-    workspaceId: workspace.id,
-    name: 'Test Space',
-  });
-
-  // Try to remove a non-existent doc
+  // Try to remove a doc from space's meta.pages (should be skipped)
   await t.notThrowsAsync(async () => {
     await t.context.spaceDoc.removeDocFromRootMeta(
       workspace.id,
       space.id,
-      'non-existent-doc'
+      'test-doc'
     );
   });
 });
 
 // =============================================================================
-// moveDoc Tests - Core functionality
+// moveDoc Tests - Core functionality (uses SpaceDoc table)
 // =============================================================================
 
-test('moveDoc should update target space meta.pages when moving to space', async t => {
+test('moveDoc should update SpaceDoc table when moving to space', async t => {
   const user = await t.context.user.create({ email: 'test@affine.pro' });
   const workspace = await t.context.workspace.create(user.id);
   const space = await t.context.space.create(user.id, {
     workspaceId: workspace.id,
     name: 'Test Space',
   });
+
+  // Create workspace root doc
+  await createWorkspaceRootDoc(t.context.doc, workspace.id);
 
   // Create a doc in the workspace (simulating an existing doc)
   const docId = 'test-doc-for-move';
@@ -294,120 +359,19 @@ test('moveDoc should update target space meta.pages when moving to space', async
   // Move the doc to the space
   await t.context.spaceDoc.moveDoc(workspace.id, docId, space.id);
 
-  // Verify the doc is in the space's meta.pages
-  const pages = await getMetaPages(t.context.doc, workspace.id, space.id);
-  t.is(pages.length, 1, 'Space meta.pages should have 1 doc');
-  t.is(pages[0].id, docId, 'Doc ID in meta.pages should match');
-
   // Verify the SpaceDoc record was created
   const spaceDocRecords = await t.context.spaceDoc.list(space.id);
   t.true(
     spaceDocRecords.includes(docId),
     'SpaceDoc table should contain the doc'
   );
+
+  // Verify space.meta.pages was NOT updated (we skip space meta.pages now)
+  const spacePages = await getMetaPages(t.context.doc, workspace.id, space.id);
+  t.is(spacePages.length, 0, 'Space meta.pages should remain empty');
 });
 
-test('moveDoc should update both source and target meta.pages', async t => {
-  const user = await t.context.user.create({ email: 'test@affine.pro' });
-  const workspace = await t.context.workspace.create(user.id);
-
-  const space1 = await t.context.space.create(user.id, {
-    workspaceId: workspace.id,
-    name: 'Space 1',
-  });
-
-  const space2 = await t.context.space.create(user.id, {
-    workspaceId: workspace.id,
-    name: 'Space 2',
-  });
-
-  // Create a doc and add it to space1's meta.pages
-  const docId = 'test-doc-for-move';
-  await t.context.doc.upsert({
-    spaceId: workspace.id,
-    containerSpaceId: space1.id,
-    docId,
-    blob: Buffer.from('test'),
-    timestamp: Date.now(),
-  });
-
-  // Manually add to space1's meta.pages to simulate existing state
-  await t.context.spaceDoc.addDoc(space1.id, docId);
-  await t.context.spaceDoc.addDocToRootMeta(workspace.id, space1.id, docId);
-
-  // Verify doc is in space1's meta.pages
-  let space1Pages = await getMetaPages(t.context.doc, workspace.id, space1.id);
-  t.is(space1Pages.length, 1, 'Space1 should have 1 doc initially');
-
-  // Move the doc from space1 to space2
-  await t.context.spaceDoc.moveDoc(workspace.id, docId, space2.id);
-
-  // Verify doc is removed from space1's meta.pages
-  space1Pages = await getMetaPages(t.context.doc, workspace.id, space1.id);
-  t.is(space1Pages.length, 0, 'Space1 should have 0 docs after move');
-
-  // Verify doc is added to space2's meta.pages
-  const space2Pages = await getMetaPages(
-    t.context.doc,
-    workspace.id,
-    space2.id
-  );
-  t.is(space2Pages.length, 1, 'Space2 should have 1 doc after move');
-  t.is(space2Pages[0].id, docId, 'Doc ID in space2 meta.pages should match');
-});
-
-test('moveDoc should handle moving to workspace root (null spaceId)', async t => {
-  const user = await t.context.user.create({ email: 'test@affine.pro' });
-  const workspace = await t.context.workspace.create(user.id);
-
-  // Create workspace root doc (simulating real workspace behavior)
-  await createWorkspaceRootDoc(t.context.doc, workspace.id);
-
-  const space = await t.context.space.create(user.id, {
-    workspaceId: workspace.id,
-    name: 'Test Space',
-  });
-
-  // Create a doc in the space
-  const docId = 'test-doc-for-move';
-  await t.context.doc.upsert({
-    spaceId: workspace.id,
-    containerSpaceId: space.id,
-    docId,
-    blob: Buffer.from('test'),
-    timestamp: Date.now(),
-  });
-
-  // Add to space's meta.pages
-  await t.context.spaceDoc.addDoc(space.id, docId);
-  await t.context.spaceDoc.addDocToRootMeta(workspace.id, space.id, docId);
-
-  // Verify doc is in space
-  let spacePages = await getMetaPages(t.context.doc, workspace.id, space.id);
-  t.is(spacePages.length, 1, 'Space should have 1 doc initially');
-
-  // Move doc to workspace root (null spaceId)
-  await t.context.spaceDoc.moveDoc(workspace.id, docId, null);
-
-  // Verify doc is removed from space's meta.pages
-  spacePages = await getMetaPages(t.context.doc, workspace.id, space.id);
-  t.is(
-    spacePages.length,
-    0,
-    'Space should have 0 docs after move to workspace root'
-  );
-
-  // Verify doc is added to workspace root's meta.pages
-  const workspacePages = await getMetaPages(
-    t.context.doc,
-    workspace.id,
-    workspace.id
-  );
-  t.is(workspacePages.length, 1, 'Workspace root should have 1 doc');
-  t.is(workspacePages[0].id, docId, 'Doc ID in workspace root should match');
-});
-
-test('moveDoc should update SpaceDoc table correctly', async t => {
+test('moveDoc should update SpaceDoc table when moving between spaces', async t => {
   const user = await t.context.user.create({ email: 'test@affine.pro' });
   const workspace = await t.context.workspace.create(user.id);
 
@@ -425,18 +389,19 @@ test('moveDoc should update SpaceDoc table correctly', async t => {
   const docId = 'test-doc-for-move';
   await t.context.doc.upsert({
     spaceId: workspace.id,
-    containerSpaceId: space1.id,
     docId,
     blob: Buffer.from('test'),
     timestamp: Date.now(),
   });
+
+  // Add to space1 via SpaceDoc table
   await t.context.spaceDoc.addDoc(space1.id, docId);
 
-  // Verify initial state in SpaceDoc table
+  // Verify doc is in space1
   let space1Docs = await t.context.spaceDoc.list(space1.id);
   t.true(space1Docs.includes(docId), 'Space1 SpaceDoc should contain the doc');
 
-  // Move to space2
+  // Move the doc from space1 to space2
   await t.context.spaceDoc.moveDoc(workspace.id, docId, space2.id);
 
   // Verify SpaceDoc table is updated
@@ -450,11 +415,59 @@ test('moveDoc should update SpaceDoc table correctly', async t => {
   t.true(space2Docs.includes(docId), 'Space2 SpaceDoc should contain the doc');
 });
 
+test('moveDoc should remove from SpaceDoc table when moving to workspace root', async t => {
+  const user = await t.context.user.create({ email: 'test@affine.pro' });
+  const workspace = await t.context.workspace.create(user.id);
+
+  // Create workspace root doc
+  await createWorkspaceRootDoc(t.context.doc, workspace.id);
+
+  const space = await t.context.space.create(user.id, {
+    workspaceId: workspace.id,
+    name: 'Test Space',
+  });
+
+  // Create a doc in the space
+  const docId = 'test-doc-for-move';
+  await t.context.doc.upsert({
+    spaceId: workspace.id,
+    docId,
+    blob: Buffer.from('test'),
+    timestamp: Date.now(),
+  });
+
+  // Add to space via SpaceDoc table
+  await t.context.spaceDoc.addDoc(space.id, docId);
+
+  // Verify doc is in space
+  let spaceDocs = await t.context.spaceDoc.list(space.id);
+  t.true(spaceDocs.includes(docId), 'Space SpaceDoc should contain the doc');
+
+  // Move doc to workspace root (null spaceId)
+  await t.context.spaceDoc.moveDoc(workspace.id, docId, null);
+
+  // Verify doc is removed from SpaceDoc table
+  spaceDocs = await t.context.spaceDoc.list(space.id);
+  t.false(
+    spaceDocs.includes(docId),
+    'Space SpaceDoc should not contain the doc after move'
+  );
+
+  // Verify doc is added to workspace.meta.pages
+  const workspacePages = await getMetaPages(
+    t.context.doc,
+    workspace.id,
+    workspace.id
+  );
+  t.is(workspacePages.length, 1, 'Workspace root should have 1 doc');
+  t.is(workspacePages[0].id, docId, 'Doc ID in workspace root should match');
+});
+
 // =============================================================================
-// Edge Cases and Concurrency Tests
+// getSpaceId and getSpaceForDoc Tests
 // =============================================================================
 
-test('addDocToRootMeta should handle concurrent updates gracefully', async t => {
+test('getSpaceId should return space ID for doc in space', async t => {
   const user = await t.context.user.create({ email: 'test@affine.pro' });
   const workspace = await t.context.workspace.create(user.id);
   const space = await t.context.space.create(user.id, {
@@ -462,36 +475,68 @@ test('addDocToRootMeta should handle concurrent updates gracefully', async t => 
     name: 'Test Space',
   });
 
-  // Simulate concurrent additions (different docs)
-  await Promise.all([
-    t.context.spaceDoc.addDocToRootMeta(
-      workspace.id,
-      space.id,
-      'concurrent-doc-1'
-    ),
-    t.context.spaceDoc.addDocToRootMeta(
-      workspace.id,
-      space.id,
-      'concurrent-doc-2'
-    ),
-    t.context.spaceDoc.addDocToRootMeta(
-      workspace.id,
-      space.id,
-      'concurrent-doc-3'
-    ),
+  const docId = 'test-doc';
+  await t.context.spaceDoc.addDoc(space.id, docId);
+
+  const spaceId = await t.context.spaceDoc.getSpaceId(docId);
+  t.is(spaceId, space.id, 'getSpaceId should return the correct space ID');
+});
+
+test('getSpaceId should return null for doc in workspace root', async t => {
+  const user = await t.context.user.create({ email: 'test@affine.pro' });
+  const workspace = await t.context.workspace.create(user.id);
+
+  // Create a doc that's not in any space
+  const docId = 'workspace-doc';
+  await t.context.doc.upsert({
+    spaceId: workspace.id,
+    docId,
+    blob: Buffer.from('test'),
+    timestamp: Date.now(),
+  });
+
+  const spaceId = await t.context.spaceDoc.getSpaceId(docId);
+  t.is(
+    spaceId,
+    null,
+    'getSpaceId should return null for docs in workspace root'
+  );
+});
+
+test('getSpaceIdsForDocs should return map of docId to spaceId', async t => {
+  const user = await t.context.user.create({ email: 'test@affine.pro' });
+  const workspace = await t.context.workspace.create(user.id);
+
+  const space1 = await t.context.space.create(user.id, {
+    workspaceId: workspace.id,
+    name: 'Space 1',
+  });
+
+  const space2 = await t.context.space.create(user.id, {
+    workspaceId: workspace.id,
+    name: 'Space 2',
+  });
+
+  await t.context.spaceDoc.addDoc(space1.id, 'doc-1');
+  await t.context.spaceDoc.addDoc(space2.id, 'doc-2');
+  // doc-3 is in workspace root (not in any space)
+
+  const spaceIds = await t.context.spaceDoc.getSpaceIdsForDocs([
+    'doc-1',
+    'doc-2',
+    'doc-3',
   ]);
 
-  // Due to timestamp-based upsert, some updates may be lost
-  // The test verifies at least one doc was added
-  const pages = await getMetaPages(t.context.doc, workspace.id, space.id);
-  t.true(pages.length >= 1, 'At least one doc should be in meta.pages');
+  t.is(spaceIds.get('doc-1'), space1.id);
+  t.is(spaceIds.get('doc-2'), space2.id);
+  t.is(spaceIds.get('doc-3'), null);
 });
 
 // =============================================================================
-// Integration Tests: Full workflow
+// Integration Tests: Full workflow using SpaceDoc table
 // =============================================================================
 
-test('full workflow: create space, add doc, move doc, verify meta.pages', async t => {
+test('full workflow: create space, add doc, move doc via SpaceDoc table', async t => {
   const user = await t.context.user.create({ email: 'test@affine.pro' });
   const workspace = await t.context.workspace.create(user.id);
 
@@ -508,13 +553,13 @@ test('full workflow: create space, add doc, move doc, verify meta.pages', async 
     name: 'Space 2',
   });
 
-  // Verify both spaces have empty meta.pages
-  let space1Pages = await getMetaPages(t.context.doc, workspace.id, space1.id);
-  let space2Pages = await getMetaPages(t.context.doc, workspace.id, space2.id);
-  t.is(space1Pages.length, 0, 'Space1 should start empty');
-  t.is(space2Pages.length, 0, 'Space2 should start empty');
+  // Verify both spaces have empty SpaceDoc records
+  let space1Docs = await t.context.spaceDoc.list(space1.id);
+  let space2Docs = await t.context.spaceDoc.list(space2.id);
+  t.is(space1Docs.length, 0, 'Space1 should start empty');
+  t.is(space2Docs.length, 0, 'Space2 should start empty');
 
-  // Create a doc in workspace root
+  // Create a doc in workspace
   const docId = 'workflow-test-doc';
   await t.context.doc.upsert({
     spaceId: workspace.id,
@@ -524,7 +569,7 @@ test('full workflow: create space, add doc, move doc, verify meta.pages', async 
   });
   await t.context.spaceDoc.addDocToRootMeta(workspace.id, workspace.id, docId);
 
-  // Verify doc is in workspace root
+  // Verify doc is in workspace root meta.pages
   let workspacePages = await getMetaPages(
     t.context.doc,
     workspace.id,
@@ -535,35 +580,44 @@ test('full workflow: create space, add doc, move doc, verify meta.pages', async 
   // Move doc from workspace to space1
   await t.context.spaceDoc.moveDoc(workspace.id, docId, space1.id);
 
-  // Verify doc moved from workspace to space1
+  // Verify doc is now in space1's SpaceDoc table
+  space1Docs = await t.context.spaceDoc.list(space1.id);
+  t.is(space1Docs.length, 1, 'Space1 SpaceDoc should have 1 doc');
+  t.true(space1Docs.includes(docId));
+
+  // Doc should still be in workspace.meta.pages (for blockCollections)
   workspacePages = await getMetaPages(
     t.context.doc,
     workspace.id,
     workspace.id
   );
-  space1Pages = await getMetaPages(t.context.doc, workspace.id, space1.id);
-  t.is(workspacePages.length, 0, 'Workspace should have 0 docs after move');
-  t.is(space1Pages.length, 1, 'Space1 should have 1 doc');
+  t.is(
+    workspacePages.length,
+    1,
+    'Workspace meta.pages should still have 1 doc'
+  );
 
   // Move doc from space1 to space2
   await t.context.spaceDoc.moveDoc(workspace.id, docId, space2.id);
 
-  // Verify doc moved from space1 to space2
-  space1Pages = await getMetaPages(t.context.doc, workspace.id, space1.id);
-  space2Pages = await getMetaPages(t.context.doc, workspace.id, space2.id);
-  t.is(space1Pages.length, 0, 'Space1 should have 0 docs after move');
-  t.is(space2Pages.length, 1, 'Space2 should have 1 doc');
+  // Verify SpaceDoc table updated correctly
+  space1Docs = await t.context.spaceDoc.list(space1.id);
+  space2Docs = await t.context.spaceDoc.list(space2.id);
+  t.is(space1Docs.length, 0, 'Space1 SpaceDoc should have 0 docs after move');
+  t.is(space2Docs.length, 1, 'Space2 SpaceDoc should have 1 doc');
 
   // Move doc back to workspace root
   await t.context.spaceDoc.moveDoc(workspace.id, docId, null);
 
-  // Verify doc moved back to workspace
-  space2Pages = await getMetaPages(t.context.doc, workspace.id, space2.id);
+  // Verify SpaceDoc table is empty for space2
+  space2Docs = await t.context.spaceDoc.list(space2.id);
+  t.is(space2Docs.length, 0, 'Space2 SpaceDoc should have 0 docs after move');
+
+  // Verify doc is still in workspace.meta.pages
   workspacePages = await getMetaPages(
     t.context.doc,
     workspace.id,
     workspace.id
   );
-  t.is(space2Pages.length, 0, 'Space2 should have 0 docs after move');
-  t.is(workspacePages.length, 1, 'Workspace should have 1 doc');
+  t.is(workspacePages.length, 1, 'Workspace meta.pages should have 1 doc');
 });

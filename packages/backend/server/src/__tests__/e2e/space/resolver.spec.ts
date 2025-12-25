@@ -1,6 +1,66 @@
+import {
+  Doc as YDoc,
+  encodeStateAsUpdate,
+  Map as YMap,
+  Text as YText,
+} from 'yjs';
+
 import { DocRole } from '../../../models';
 import { Mockers } from '../../mocks';
 import { app, e2e } from '../test';
+
+/**
+ * Create a Y.Doc blob that contains a LinkedPage reference.
+ * This simulates what happens when a user creates a nested doc using the /doc command.
+ */
+function createDocWithLinkedPage(
+  docId: string,
+  linkedPageIds: string[]
+): Uint8Array {
+  const doc = new YDoc({ guid: docId });
+
+  // Create blocks map (standard AFFiNE doc structure)
+  const blocks = doc.getMap<YMap<unknown>>('blocks');
+
+  // Create a page block
+  const pageBlock = new YMap<unknown>();
+  pageBlock.set('sys:id', docId);
+  pageBlock.set('sys:flavour', 'affine:page');
+  pageBlock.set('sys:children', [`${docId}-note`]);
+  pageBlock.set('prop:title', new YText('Test Doc'));
+  blocks.set(docId, pageBlock);
+
+  // Create a note block
+  const noteBlock = new YMap<unknown>();
+  noteBlock.set('sys:id', `${docId}-note`);
+  noteBlock.set('sys:flavour', 'affine:note');
+  const paragraphIds = linkedPageIds.map(
+    (_, i) => `${docId}-paragraph-${i + 1}`
+  );
+  noteBlock.set('sys:children', paragraphIds);
+  blocks.set(`${docId}-note`, noteBlock);
+
+  // Create paragraph blocks with LinkedPage references
+  linkedPageIds.forEach((linkedPageId, i) => {
+    const paragraphBlock = new YMap<unknown>();
+    paragraphBlock.set('sys:id', `${docId}-paragraph-${i + 1}`);
+    paragraphBlock.set('sys:flavour', 'affine:paragraph');
+    paragraphBlock.set('sys:children', []);
+
+    // Create text with LinkedPage reference
+    const text = new YText();
+    text.insert(0, ' ', {
+      reference: {
+        type: 'LinkedPage',
+        pageId: linkedPageId,
+      },
+    });
+    paragraphBlock.set('prop:text', text);
+    blocks.set(`${docId}-paragraph-${i + 1}`, paragraphBlock);
+  });
+
+  return encodeStateAsUpdate(doc);
+}
 
 // Note: These tests use inline GraphQL queries since the schema hasn't been generated yet.
 // Once the schema is generated and graphql codegen runs, these can be replaced with
@@ -854,5 +914,196 @@ e2e(
       },
       { message: /denied|permission|access/i }
     );
+  }
+);
+
+// =============================================================================
+// Remove Orphaned Doc From Space Tests
+// =============================================================================
+
+const removeOrphanedDocFromSpaceMutation: GqlQuery = {
+  id: 'removeOrphanedDocFromSpaceMutation',
+  op: 'removeOrphanedDocFromSpace',
+  query: `mutation removeOrphanedDocFromSpace($workspaceId: String!, $spaceId: String!, $docId: String!) {
+    removeOrphanedDocFromSpace(workspaceId: $workspaceId, spaceId: $spaceId, docId: $docId)
+  }`,
+};
+
+e2e(
+  'removeOrphanedDocFromSpace should remove doc reference from space meta.pages',
+  async t => {
+    const owner = await app.signup();
+
+    const workspace = await app.create(Mockers.Workspace, {
+      owner: { id: owner.id },
+    });
+
+    // Create a space
+    const space = await app.create(Mockers.Space, {
+      workspace: { id: workspace.id },
+      owner: { id: owner.id },
+    });
+
+    // Create a doc
+    const docId = 'test-orphaned-doc';
+    await app.create(Mockers.DocSnapshot, {
+      user: { id: owner.id },
+      workspaceId: workspace.id,
+      docId,
+    });
+
+    // Move doc to space
+    await rawGql(moveDocToSpaceMutation, {
+      input: {
+        workspaceId: workspace.id,
+        docId,
+        spaceId: space.id,
+      },
+    });
+
+    // Verify doc exists in space
+    let result = await rawGql(getSpaceWithDocIdsQuery, {
+      workspaceId: workspace.id,
+      spaceId: space.id,
+    });
+    t.is(result.getSpace.docCount, 1, 'Space should have 1 doc');
+
+    // Call removeOrphanedDocFromSpace to clean up (simulating orphaned doc scenario)
+    // In real scenario the doc snapshot would be missing, but the reference would remain
+    await rawGql(removeOrphanedDocFromSpaceMutation, {
+      workspaceId: workspace.id,
+      spaceId: space.id,
+      docId,
+    });
+
+    // Verify doc reference is removed from space
+    result = await rawGql(getSpaceWithDocIdsQuery, {
+      workspaceId: workspace.id,
+      spaceId: space.id,
+    });
+    t.is(result.getSpace.docCount, 0, 'Space should have 0 docs after cleanup');
+  }
+);
+
+e2e('removeOrphanedDocFromSpace requires admin permission', async t => {
+  const owner = await app.signup();
+  const member = await app.signup();
+
+  const workspace = await app.create(Mockers.Workspace, {
+    owner: { id: owner.id },
+  });
+
+  // Add member to workspace (not admin)
+  await app.create(Mockers.WorkspaceUser, {
+    workspaceId: workspace.id,
+    userId: member.id,
+  });
+
+  // Create a space
+  const space = await app.create(Mockers.Space, {
+    workspace: { id: workspace.id },
+    owner: { id: owner.id },
+  });
+
+  // Login as member
+  await app.login(member);
+
+  // Member should not be able to remove orphaned docs
+  await t.throwsAsync(
+    async () => {
+      await rawGql(removeOrphanedDocFromSpaceMutation, {
+        workspaceId: workspace.id,
+        spaceId: space.id,
+        docId: 'any-doc-id',
+      });
+    },
+    { message: /denied|permission|access/i }
+  );
+});
+
+// =============================================================================
+// Nested Docs Move Tests (tests getDocReferences implementation)
+// =============================================================================
+
+const moveDocToWorkspaceMutation: GqlQuery = {
+  id: 'moveDocToWorkspaceMutation',
+  op: 'moveDocToWorkspace',
+  query: `mutation moveDocToWorkspace($input: MoveDocToWorkspaceInput!) {
+    moveDocToWorkspace(input: $input) {
+      success
+      movedDocs {
+        originalDocId
+        newDocId
+      }
+      newWorkspaceId
+    }
+  }`,
+};
+
+e2e(
+  'moveDocToWorkspace with moveLinkedDocs should move nested docs',
+  async t => {
+    const owner = await app.signup();
+
+    // Create source workspace
+    const sourceWorkspace = await app.create(Mockers.Workspace, {
+      owner: { id: owner.id },
+    });
+
+    // Create target workspace
+    const targetWorkspace = await app.create(Mockers.Workspace, {
+      owner: { id: owner.id },
+    });
+
+    // Create target space in target workspace
+    const targetSpace = await app.create(Mockers.Space, {
+      workspace: { id: targetWorkspace.id },
+      owner: { id: owner.id },
+    });
+
+    // Create nested child doc B first (it will be referenced by parent)
+    const childDocId = 'child-doc-B';
+    await app.create(Mockers.DocSnapshot, {
+      user: { id: owner.id },
+      workspaceId: sourceWorkspace.id,
+      docId: childDocId,
+    });
+
+    // Create parent doc A with a LinkedPage reference to child B
+    // This simulates how nested docs are created in AFFiNE via the /doc command
+    const parentDocId = 'parent-doc-A';
+    const parentDocBlob = createDocWithLinkedPage(parentDocId, [childDocId]);
+    await app.create(Mockers.DocSnapshot, {
+      user: { id: owner.id },
+      workspaceId: sourceWorkspace.id,
+      docId: parentDocId,
+      blob: parentDocBlob,
+    });
+
+    // Move parent doc with moveLinkedDocs=true and nested mode
+    const result = await rawGql(moveDocToWorkspaceMutation, {
+      input: {
+        sourceWorkspaceId: sourceWorkspace.id,
+        docId: parentDocId,
+        targetWorkspaceId: targetWorkspace.id,
+        targetSpaceId: targetSpace.id,
+        moveLinkedDocs: true,
+        linkTraversalMode: 'Nested',
+      },
+    });
+
+    t.true(result.moveDocToWorkspace.success, 'Move should succeed');
+    t.is(
+      result.moveDocToWorkspace.movedDocs.length,
+      2,
+      'Should move 2 docs (parent + child)'
+    );
+
+    // Verify both doc IDs are in the result
+    const movedDocIds = result.moveDocToWorkspace.movedDocs.map(
+      (d: { originalDocId: string }) => d.originalDocId
+    );
+    t.true(movedDocIds.includes(parentDocId), 'Parent doc should be moved');
+    t.true(movedDocIds.includes(childDocId), 'Child doc should be moved');
   }
 );

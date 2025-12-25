@@ -87,7 +87,6 @@ export class MockSpace extends Mocker<MockSpaceInput, MockedSpace> {
       data: {
         workspaceId,
         id: spaceId,
-        spaceId: null, // Root doc is at workspace level
         blob: update,
         createdAt: new Date(),
         updatedAt: new Date(),

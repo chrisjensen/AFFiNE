@@ -46,7 +46,6 @@ const snapshot: Snapshot = {
   createdAt: new Date(),
   createdBy: null,
   updatedBy: null,
-  spaceId: null,
 };
 
 function getSnapshot(timestamp: number = Date.now()): DocRecord {
