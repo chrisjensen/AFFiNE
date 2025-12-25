@@ -44,10 +44,9 @@ export class DocModel extends BaseModel {
 
   // #region Update
 
-  private updateToDocRecord(row: Update & { spaceId?: string | null }): Doc {
+  private updateToDocRecord(row: Update): Doc {
     return {
       spaceId: row.workspaceId,
-      containerSpaceId: row.spaceId || undefined,
       docId: row.id,
       blob: row.blob,
       timestamp: row.createdAt.getTime(),
@@ -55,10 +54,9 @@ export class DocModel extends BaseModel {
     };
   }
 
-  private docRecordToUpdate(record: Doc): Update & { spaceId: string | null } {
+  private docRecordToUpdate(record: Doc): Omit<Update, 'spaceId'> {
     return {
       workspaceId: record.spaceId,
-      spaceId: record.containerSpaceId || null,
       id: record.docId,
       blob: record.blob,
       createdAt: new Date(record.timestamp),
@@ -149,7 +147,7 @@ export class DocModel extends BaseModel {
    * insert or update a doc.
    */
   async upsert(doc: Doc) {
-    const { spaceId, containerSpaceId, docId, blob, timestamp, editorId } = doc;
+    const { spaceId, docId, blob, timestamp, editorId } = doc;
     const updatedAt = new Date(timestamp);
     // CONCERNS:
     //   i. Because we save the real user's last seen action time as `updatedAt`,
@@ -159,11 +157,13 @@ export class DocModel extends BaseModel {
     //      In our case, we need to manually check the `updatedAt` to avoid overriding the newer snapshot.
     //      where: { workspaceId_id: {}, updatedAt: { lt: updatedAt } }
     //                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    // NOTE: space_id column will be removed in a future migration.
+    // Space membership is now tracked only in SpaceDoc table.
     const result: { updatedAt: Date }[] = await this.db.$queryRaw`
       INSERT INTO "snapshots" ("workspace_id", "space_id", "guid", "blob", "created_at", "updated_at", "created_by", "updated_by")
-      VALUES (${spaceId}, ${containerSpaceId ?? null}, ${docId}, ${blob}, DEFAULT, ${updatedAt}, ${editorId}, ${editorId})
+      VALUES (${spaceId}, ${null}, ${docId}, ${blob}, DEFAULT, ${updatedAt}, ${editorId}, ${editorId})
       ON CONFLICT ("workspace_id", "guid")
-      DO UPDATE SET "blob" = ${blob}, "updated_at" = ${updatedAt}, "updated_by" = ${editorId}, "space_id" = ${containerSpaceId ?? null}
+      DO UPDATE SET "blob" = ${blob}, "updated_at" = ${updatedAt}, "updated_by" = ${editorId}
       WHERE "snapshots"."workspace_id" = ${spaceId} AND "snapshots"."guid" = ${docId} AND "snapshots"."updated_at" <= ${updatedAt}
       RETURNING "snapshots"."workspace_id" as "workspaceId", "snapshots"."guid" as "id", "snapshots"."updated_at" as "updatedAt"
     `;
@@ -181,7 +181,6 @@ export class DocModel extends BaseModel {
     const row = await this.getSnapshot(workspaceId, docId, {
       select: {
         workspaceId: true,
-        spaceId: true,
         id: true,
         blob: true,
         updatedAt: true,
@@ -193,7 +192,6 @@ export class DocModel extends BaseModel {
     }
     return {
       spaceId: row.workspaceId,
-      containerSpaceId: row.spaceId || undefined,
       docId: row.id,
       blob: row.blob,
       timestamp: row.updatedAt.getTime(),
@@ -358,6 +356,7 @@ export class DocModel extends BaseModel {
 
   /**
    * Find the timestamps of docs in a specific space (container).
+   * Uses SpaceDoc table as the source of truth for space membership.
    *
    * @param workspaceId The workspace ID.
    * @param containerSpaceId The containing space ID.
@@ -368,6 +367,21 @@ export class DocModel extends BaseModel {
     containerSpaceId: string,
     after?: number
   ) {
+    // Get doc IDs from SpaceDoc table (single source of truth for space membership)
+    const spaceDocs = await this.db.spaceDoc.findMany({
+      where: {
+        spaceId: containerSpaceId,
+      },
+      select: {
+        docId: true,
+      },
+    });
+
+    const docIds = spaceDocs.map(sd => sd.docId);
+    if (docIds.length === 0) {
+      return {};
+    }
+
     const snapshots = await this.db.snapshot.findMany({
       select: {
         id: true,
@@ -375,7 +389,7 @@ export class DocModel extends BaseModel {
       },
       where: {
         workspaceId,
-        spaceId: containerSpaceId,
+        id: { in: docIds },
         ...(after
           ? {
               updatedAt: {
@@ -389,7 +403,7 @@ export class DocModel extends BaseModel {
     const updates = await this.db.update.groupBy({
       where: {
         workspaceId,
-        spaceId: containerSpaceId,
+        id: { in: docIds },
         ...(after
           ? {
               createdAt: {
@@ -421,29 +435,71 @@ export class DocModel extends BaseModel {
 
   /**
    * Move a doc to a different space (container).
-   * Updates the space_id in snapshots, updates, and snapshot_histories.
+   * Space membership is now tracked only in SpaceDoc table.
+   * This method is kept for backwards compatibility but is a no-op.
+   * Use spaceDoc.removeDoc() and spaceDoc.addDoc() to manage space membership.
+   *
+   * @deprecated Use SpaceDocModel.removeDoc/addDoc instead
    */
   @Transactional()
   async moveToSpace(
     workspaceId: string,
     docId: string,
-    targetContainerSpaceId: string | null
+    _targetContainerSpaceId: string | null
   ) {
+    // NOTE: The space_id column will be removed in a future migration.
+    // Space membership is now tracked only in SpaceDoc table.
+    // This method is kept for backwards compatibility but does nothing.
+    this.logger.log(
+      `moveToSpace called for doc ${docId} in workspace ${workspaceId} (no-op: use SpaceDoc)`
+    );
+  }
+
+  /**
+   * Move a doc to a different workspace.
+   * Updates the workspace_id in snapshots, updates, and snapshot_histories.
+   * This is an atomic operation that just updates references - no copy/delete.
+   *
+   * Note: Space membership is tracked in SpaceDoc table, not here.
+   * Use spaceDoc.removeDoc() and spaceDoc.addDoc() to manage space membership.
+   */
+  @Transactional()
+  async moveToWorkspace(
+    sourceWorkspaceId: string,
+    docId: string,
+    targetWorkspaceId: string,
+    _targetContainerSpaceId: string | null
+  ) {
+    // NOTE: The space_id column will be removed in a future migration.
+    // Space membership is now tracked only in SpaceDoc table.
+    // Only update workspaceId here.
     await this.db.snapshot.updateMany({
-      where: { workspaceId, id: docId },
-      data: { spaceId: targetContainerSpaceId },
+      where: { workspaceId: sourceWorkspaceId, id: docId },
+      data: { workspaceId: targetWorkspaceId },
     });
     await this.db.update.updateMany({
-      where: { workspaceId, id: docId },
-      data: { spaceId: targetContainerSpaceId },
+      where: { workspaceId: sourceWorkspaceId, id: docId },
+      data: { workspaceId: targetWorkspaceId },
     });
     await this.db.snapshotHistory.updateMany({
-      where: { workspaceId, id: docId },
-      data: { spaceId: targetContainerSpaceId },
+      where: { workspaceId: sourceWorkspaceId, id: docId },
+      data: { workspaceId: targetWorkspaceId },
     });
 
     this.logger.log(
-      `Moved doc ${docId} to space ${targetContainerSpaceId ?? 'workspace root'} in workspace ${workspaceId}`
+      `Moved doc ${docId} from workspace ${sourceWorkspaceId} to workspace ${targetWorkspaceId}`
+    );
+  }
+
+  /**
+   * Delete doc metadata.
+   */
+  async deleteMeta(workspaceId: string, docId: string) {
+    await this.db.workspaceDoc.deleteMany({
+      where: { workspaceId, docId },
+    });
+    this.logger.log(
+      `Deleted doc meta for ${docId} in workspace ${workspaceId}`
     );
   }
 

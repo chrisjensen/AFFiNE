@@ -102,11 +102,10 @@ export class SpaceModel extends BaseModel {
     const update = encodeStateAsUpdate(rootDoc);
 
     // Store the root doc snapshot
-    // The root doc is stored at workspace level (containerSpaceId = null)
+    // The root doc is stored at workspace level (not inside any space)
     // because it IS the space, not a doc inside the space
     await this.models.doc.upsert({
       spaceId: workspaceId,
-      containerSpaceId: undefined, // Root doc is at workspace level
       docId: spaceId,
       blob: update,
       timestamp: Date.now(),
@@ -173,21 +172,34 @@ export class SpaceModel extends BaseModel {
 
   /**
    * Delete all docs that belong to a specific space container.
+   * Uses SpaceDoc table as the source of truth for space membership.
    */
   private async deleteAllDocsInSpace(workspaceId: string, spaceId: string) {
+    // Get doc IDs from SpaceDoc table (source of truth for space membership)
+    const spaceDocs = await this.db.spaceDoc.findMany({
+      where: { spaceId },
+      select: { docId: true },
+    });
+    const docIds = spaceDocs.map(sd => sd.docId);
+
+    if (docIds.length === 0) {
+      this.logger.log(`No docs found in space [${spaceId}]`);
+      return;
+    }
+
     // Delete all snapshots, updates, and histories for docs in this space
     await this.db.snapshot.deleteMany({
-      where: { workspaceId, spaceId },
+      where: { workspaceId, id: { in: docIds } },
     });
     await this.db.update.deleteMany({
-      where: { workspaceId, spaceId },
+      where: { workspaceId, id: { in: docIds } },
     });
     await this.db.snapshotHistory.deleteMany({
-      where: { workspaceId, spaceId },
+      where: { workspaceId, id: { in: docIds } },
     });
 
     this.logger.log(
-      `Deleted all docs in space [${spaceId}] of workspace [${workspaceId}]`
+      `Deleted ${docIds.length} docs in space [${spaceId}] of workspace [${workspaceId}]`
     );
   }
 
