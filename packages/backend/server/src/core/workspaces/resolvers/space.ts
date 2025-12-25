@@ -639,4 +639,42 @@ export class SpaceResolver {
 
     return true;
   }
+
+  @Mutation(() => Boolean, {
+    description:
+      'Remove an orphaned doc reference from a space (for cleanup when doc no longer exists)',
+  })
+  async removeOrphanedDocFromSpace(
+    @CurrentUser() user: CurrentUser,
+    @Args('workspaceId') workspaceId: string,
+    @Args('spaceId') spaceId: string,
+    @Args('docId') docId: string
+  ): Promise<boolean> {
+    // Check workspace admin permission since doc may not exist
+    await this.ac
+      .user(user.id)
+      .workspace(workspaceId)
+      .assert('Workspace.Users.Manage');
+
+    const space = await this.models.space.get(spaceId);
+    if (!space || space.workspaceId !== workspaceId) {
+      throw new SpaceNotFound({ spaceId });
+    }
+
+    // Remove from meta.pages
+    await this.models.spaceDoc.removeDocFromRootMeta(
+      workspaceId,
+      spaceId,
+      docId
+    );
+
+    // Clean up SpaceDoc table entry if exists
+    await this.models.spaceDoc.removeDoc(spaceId, docId);
+
+    this.logger.log(
+      `Removed orphaned doc reference [${docId}] from space [${spaceId}]`
+    );
+
+    return true;
+  }
 }

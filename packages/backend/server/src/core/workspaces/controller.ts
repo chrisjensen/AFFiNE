@@ -95,6 +95,23 @@ export class WorkspacesController {
     body.pipe(res);
   }
 
+  // get doc timestamps for workspace
+  @Get('/:id/doc-timestamps')
+  @CallMetric('controllers', 'workspace_get_doc_timestamps')
+  async getDocTimestamps(
+    @CurrentUser() user: CurrentUser,
+    @Param('id') workspaceId: string,
+    @Query('after') after?: string
+  ): Promise<Record<string, number>> {
+    await this.ac.user(user.id).workspace(workspaceId).assert('Workspace.Read');
+
+    const afterTimestamp = after ? parseInt(after, 10) : undefined;
+    return await this.models.doc.findTimestampsByWorkspaceId(
+      workspaceId,
+      afterTimestamp
+    );
+  }
+
   // get doc binary
   @Public()
   @Get('/:id/docs/:guid')
@@ -164,6 +181,7 @@ export class WorkspacesController {
     }
 
     res.setHeader('content-type', 'application/octet-stream');
+    res.setHeader('x-doc-timestamp', binResponse.timestamp.toString());
     res.send(binResponse.bin);
   }
 

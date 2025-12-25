@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Transactional } from '@nestjs-cls/transactional';
-import { applyUpdate, Doc as YDoc, Map as YMap } from 'yjs';
+import { applyUpdate, Doc as YDoc, Map as YMap, Text as YText } from 'yjs';
 
 import { DocIsInTrash } from '../../base/error';
 import { Models } from '../../models';
@@ -145,18 +145,95 @@ export class DocMoveService {
   }
 
   /**
-   * Get document references (outgoing links) from a document.
-   * TODO: Implement proper link extraction from Y.Doc content or indexer.
-   * For now, returns empty array - linked doc moving will be a follow-up.
+   * Get document references (LinkedPage and embed-synced-doc) from a document's content.
+   * When a user creates a nested doc (e.g., using /doc command), a LinkedPage reference
+   * is inserted into the parent doc's content as a text attribute.
+   *
+   * This extracts those references to find documents that should be moved together
+   * when "move linked docs" is enabled.
    */
   private async getDocReferences(
-    _workspaceId: string,
-    _docId: string
+    workspaceId: string,
+    docId: string
   ): Promise<string[]> {
-    // Link extraction requires parsing Y.Doc content which is complex.
-    // For MVP, we only move the single document.
-    // Linked doc support will be added in a follow-up PR.
-    return [];
+    try {
+      // Load the doc's Y.Doc content
+      const snapshot = await this.models.doc.get(workspaceId, docId);
+      if (!snapshot?.blob) {
+        this.logger.debug(`No snapshot found for doc ${docId}`);
+        return [];
+      }
+
+      const linkedPageIds = this.extractLinkedPageIds(snapshot.blob);
+      return Array.from(linkedPageIds);
+    } catch (error) {
+      this.logger.warn(`Failed to get doc references for ${docId}: ${error}`);
+      return [];
+    }
+  }
+
+  /**
+   * Extract LinkedPage reference IDs from a Y.Doc binary.
+   * LinkedPage references are stored as text attributes in paragraph/list blocks:
+   * { insert: ' ', attributes: { reference: { type: 'LinkedPage', pageId: '...' } } }
+   *
+   * Also extracts embed-synced-doc block references:
+   * { sys:flavour: 'affine:embed-synced-doc', prop:pageId: '...' }
+   */
+  private extractLinkedPageIds(docBinary: Uint8Array): Set<string> {
+    const linkedPageIds = new Set<string>();
+
+    try {
+      const doc = new YDoc();
+      applyUpdate(doc, docBinary);
+
+      // Check if this is a page doc with blocks
+      if (!doc.share.has('blocks')) {
+        return linkedPageIds;
+      }
+
+      const blocks = doc.getMap<YMap<unknown>>('blocks');
+
+      for (const block of blocks.values()) {
+        const flavour = block.get('sys:flavour') as string;
+
+        // Check blocks that can have text content with LinkedPage references
+        if (
+          flavour === 'affine:paragraph' ||
+          flavour === 'affine:list' ||
+          flavour === 'affine:code'
+        ) {
+          const text = block.get('prop:text');
+          if (text instanceof YText) {
+            // Extract delta and look for LinkedPage references
+            const delta = text.toDelta();
+            for (const op of delta) {
+              const ref = op.attributes?.reference;
+              if (
+                ref &&
+                typeof ref === 'object' &&
+                ref.type === 'LinkedPage' &&
+                typeof ref.pageId === 'string'
+              ) {
+                linkedPageIds.add(ref.pageId);
+              }
+            }
+          }
+        }
+
+        // Also check for embedded synced doc blocks
+        if (flavour === 'affine:embed-synced-doc') {
+          const pageId = block.get('prop:pageId') as string | undefined;
+          if (pageId) {
+            linkedPageIds.add(pageId);
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.warn(`Failed to extract LinkedPage IDs: ${error}`);
+    }
+
+    return linkedPageIds;
   }
 
   /**
@@ -204,9 +281,9 @@ export class DocMoveService {
   }
 
   /**
-   * Move a single document from source to target workspace.
+   * Move a single document from source to target workspace/space.
+   * Uses UPDATE instead of copy-delete for atomicity and safety.
    * Preserves the document ID for external link compatibility.
-   * Optionally assigns the doc to a space in the target workspace.
    */
   private async moveDoc(
     sourceWorkspaceId: string,
@@ -214,47 +291,21 @@ export class DocMoveService {
     targetWorkspaceId: string,
     targetSpaceId?: string | null
   ): Promise<void> {
-    // 1. Copy snapshot to target workspace
-    const snapshot = await this.models.doc.get(sourceWorkspaceId, docId);
-    if (snapshot) {
-      await this.models.doc.upsert({
-        spaceId: targetWorkspaceId,
-        containerSpaceId: targetSpaceId ?? undefined,
-        docId: docId, // Preserve the original doc ID
-        blob: snapshot.blob,
-        timestamp: Date.now(),
-        editorId: snapshot.editorId,
-      });
-    }
+    const isSameWorkspace = sourceWorkspaceId === targetWorkspaceId;
 
-    // 2. Copy pending updates
-    const updates = await this.models.doc.findUpdates(sourceWorkspaceId, docId);
-    if (updates.length > 0) {
-      await this.models.doc.createUpdates(
-        updates.map(u => ({
-          spaceId: targetWorkspaceId,
-          containerSpaceId: targetSpaceId ?? undefined,
-          docId: docId,
-          blob: u.blob,
-          timestamp: u.timestamp,
-          editorId: u.editorId,
-        }))
+    // For same-workspace moves, delegate to spaceDoc.moveDoc() which correctly
+    // handles space membership and ensures doc stays in workspace meta.pages
+    if (isSameWorkspace) {
+      await this.models.spaceDoc.moveDoc(
+        sourceWorkspaceId,
+        docId,
+        targetSpaceId ?? null
       );
+      return;
     }
 
-    // 3. Copy doc metadata
-    const meta = await this.models.doc.getMeta(sourceWorkspaceId, docId);
-    if (meta) {
-      await this.models.doc.upsertMeta(targetWorkspaceId, docId, {
-        mode: meta.mode,
-        // Don't copy public status - user must re-publish if needed
-      });
-    }
-
-    // 4. Copy blobs referenced by this document
-    await this.copyDocBlobs(sourceWorkspaceId, docId, targetWorkspaceId);
-
-    // 5. Get source space and doc metadata BEFORE modifying SpaceDoc mappings
+    // Cross-workspace move: handle workspace ID updates, blob copying, and metadata transfer
+    // 1. Get source space and metadata BEFORE any modifications
     const sourceSpaceId = await this.models.spaceDoc.getSpaceId(docId);
     const sourceContainerId = sourceSpaceId ?? sourceWorkspaceId;
 
@@ -270,22 +321,52 @@ export class DocMoveService {
       );
     }
 
-    // 6. Assign doc to target container (space or workspace root)
-    // Pass metadata to preserve icon and other properties
-    await this.models.spaceDoc.assignDocToContainer(
-      targetWorkspaceId,
+    // 2. Update database references (atomic UPDATE, not copy-delete)
+    // Cross-workspace: update workspace_id and space_id columns
+    await this.models.doc.moveToWorkspace(
+      sourceWorkspaceId,
       docId,
-      targetSpaceId ?? null,
-      docMeta ?? undefined
+      targetWorkspaceId,
+      targetSpaceId ?? null
     );
 
-    // 7. Remove from source and delete
+    // Copy blobs (only needed for cross-workspace, blobs are keyed by workspace)
+    await this.copyDocBlobs(sourceWorkspaceId, docId, targetWorkspaceId);
+
+    // Move WorkspaceDoc metadata (mode, public status, etc.)
+    const meta = await this.models.doc.getMeta(sourceWorkspaceId, docId);
+    if (meta) {
+      await this.models.doc.upsertMeta(targetWorkspaceId, docId, {
+        mode: meta.mode,
+        // Don't copy public status - user must re-publish if needed
+      });
+      await this.models.doc.deleteMeta(sourceWorkspaceId, docId);
+    }
+
+    // 3. Update SpaceDoc mappings
+    await this.models.spaceDoc.removeDoc(sourceSpaceId ?? '', docId);
+    if (targetSpaceId) {
+      await this.models.spaceDoc.addDoc(targetSpaceId, docId);
+    }
+
+    // 4. Update meta.pages in source and target containers
     await this.models.spaceDoc.removeDocFromRootMeta(
       sourceWorkspaceId,
       sourceContainerId,
       docId
     );
-    await this.models.doc.delete(sourceWorkspaceId, docId);
+    await this.models.spaceDoc.addDocToRootMeta(
+      targetWorkspaceId,
+      targetSpaceId ?? targetWorkspaceId,
+      docId,
+      docMeta ?? undefined
+    );
+
+    // 5. Ensure doc is in target workspace's meta.pages
+    await this.models.spaceDoc.ensureDocInWorkspaceMeta(
+      targetWorkspaceId,
+      docId
+    );
   }
 
   /**
