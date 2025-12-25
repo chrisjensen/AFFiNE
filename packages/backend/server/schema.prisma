@@ -351,8 +351,6 @@ model WorkspaceFeature {
 // Snapshot + Updates are the latest state of the doc
 model Snapshot {
   workspaceId String   @map("workspace_id") @db.VarChar
-  // Space ID for space-scoped docs. NULL = workspace root level (not in any space)
-  spaceId     String?  @map("space_id") @db.VarChar
   id          String   @default(uuid()) @map("guid") @db.VarChar
   blob        Bytes    @db.ByteA
   state       Bytes?   @db.ByteA
@@ -378,7 +376,6 @@ model Snapshot {
 
   @@id([workspaceId, id])
   @@index([workspaceId, updatedAt])
-  @@index([workspaceId, spaceId, updatedAt])
   // Index on docId alone to support cross-workspace doc lookup (for 301 redirects after doc moves)
   @@index([id])
   @@map("snapshots")
@@ -403,8 +400,6 @@ model UserSnapshot {
 
 model Update {
   workspaceId String   @map("workspace_id") @db.VarChar
-  // Space ID for space-scoped docs. NULL = workspace root level (not in any space)
-  spaceId     String?  @map("space_id") @db.VarChar
   id          String   @map("guid") @db.VarChar
   blob        Bytes    @db.ByteA
   createdAt   DateTime @map("created_at") @db.Timestamptz(3)
@@ -417,7 +412,6 @@ model Update {
   seq Int? @db.Integer
 
   @@id([workspaceId, id, createdAt])
-  @@index([workspaceId, spaceId, id])
   // Index on docId alone to support cross-workspace doc lookup (for 301 redirects after doc moves)
   @@index([id])
   @@map("updates")
@@ -425,8 +419,6 @@ model Update {
 
 model SnapshotHistory {
   workspaceId String   @map("workspace_id") @db.VarChar
-  // Space ID for space-scoped docs. NULL = workspace root level (not in any space)
-  spaceId     String?  @map("space_id") @db.VarChar
   id          String   @map("guid") @db.VarChar
   timestamp   DateTime @db.Timestamptz(3)
   blob        Bytes    @db.ByteA
@@ -438,7 +430,6 @@ model SnapshotHistory {
   createdByUser User? @relation(name: "createdHistory", fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@id([workspaceId, id, timestamp])
-  @@index([workspaceId, spaceId, id])
   @@map("snapshot_histories")
 }
 

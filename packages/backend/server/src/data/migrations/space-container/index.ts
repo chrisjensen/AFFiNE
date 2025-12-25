@@ -14,11 +14,12 @@ const logger = new Logger('SpaceContainerMigration');
  * Data migration for Space-as-Container architecture.
  *
  * This migration:
- * 1. Updates containerSpaceId (space_id) for docs in the SpaceDoc mapping table
- * 2. Creates root documents for existing spaces that don't have them
- * 3. Populates space root docs' meta.pages with existing docs
+ * 1. Creates root documents for existing spaces that don't have them
+ * 2. Populates space root docs' meta.pages with existing docs
  *
- * This should be run AFTER the schema migration (20251217000000_add_space_id_to_doc_tables)
+ * NOTE: The containerSpaceId (space_id) column updates have been removed
+ * as part of the consolidation to use SpaceDoc as the single source of truth.
+ * Space membership is now tracked ONLY in the SpaceDoc table.
  */
 export async function migrateSpaceContainers(prisma: PrismaClient) {
   logger.log('Starting Space-as-Container migration...');
@@ -63,47 +64,9 @@ export async function migrateSpaceContainers(prisma: PrismaClient) {
       await createSpaceRootDoc(prisma, space.workspaceId, space.id, space.name);
     }
 
-    // Step 2b: Update containerSpaceId for docs in this space
+    // Step 2b: Update space root doc's meta.pages with the docs
     const docIds = docsBySpace.get(space.id) || [];
     if (docIds.length > 0) {
-      logger.log(
-        `Updating containerSpaceId for ${docIds.length} docs in space [${space.id}]`
-      );
-
-      // Update snapshots
-      await prisma.snapshot.updateMany({
-        where: {
-          workspaceId: space.workspaceId,
-          id: { in: docIds },
-        },
-        data: {
-          spaceId: space.id,
-        },
-      });
-
-      // Update updates
-      await prisma.update.updateMany({
-        where: {
-          workspaceId: space.workspaceId,
-          id: { in: docIds },
-        },
-        data: {
-          spaceId: space.id,
-        },
-      });
-
-      // Update snapshot histories
-      await prisma.snapshotHistory.updateMany({
-        where: {
-          workspaceId: space.workspaceId,
-          id: { in: docIds },
-        },
-        data: {
-          spaceId: space.id,
-        },
-      });
-
-      // Step 2c: Update space root doc's meta.pages with the docs
       await updateSpaceRootDocPages(
         prisma,
         space.workspaceId,
@@ -139,8 +102,6 @@ async function createSpaceRootDoc(
       id: spaceId,
       blob: Buffer.from(update),
       updatedAt: new Date(),
-      // Root doc is at workspace level (not inside any space)
-      spaceId: null,
     },
   });
 
@@ -238,27 +199,12 @@ async function updateSpaceRootDocPages(
 }
 
 /**
- * Rollback migration - remove space_id from docs and delete space root docs.
- * Use with caution!
+ * Rollback migration - delete space root docs.
+ * NOTE: The space_id column operations have been removed since
+ * the column is being dropped as part of the SpaceDoc consolidation.
  */
 export async function rollbackSpaceContainers(prisma: PrismaClient) {
   logger.log('Rolling back Space-as-Container migration...');
-
-  // Clear space_id from all docs
-  await prisma.snapshot.updateMany({
-    where: { spaceId: { not: null } },
-    data: { spaceId: null },
-  });
-
-  await prisma.update.updateMany({
-    where: { spaceId: { not: null } },
-    data: { spaceId: null },
-  });
-
-  await prisma.snapshotHistory.updateMany({
-    where: { spaceId: { not: null } },
-    data: { spaceId: null },
-  });
 
   // Delete space root documents
   const spaces = await prisma.workspaceSpace.findMany();
