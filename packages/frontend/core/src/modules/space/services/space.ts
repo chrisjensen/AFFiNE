@@ -1,7 +1,6 @@
 import { LiveData, ObjectPool, Service } from '@toeverything/infra';
 
 import { WorkspaceService } from '../../workspace';
-import { WorkspaceEngineBeforeStart } from '../../workspace/events';
 import { Space } from '../entities/space';
 import type {
   CreateSpaceInput,
@@ -10,37 +9,23 @@ import type {
   SpaceStore,
 } from '../stores/space';
 
+/**
+ * SpaceService manages the collection of spaces within a workspace.
+ *
+ * Space membership is tracked server-side in the SpaceDoc table.
+ * The frontend uses server responses as the single source of truth
+ * for which docs belong to which spaces.
+ */
 export class SpaceService extends Service {
   constructor(
     private readonly store: SpaceStore,
     private readonly workspaceService: WorkspaceService
   ) {
     super();
-
-    // Listen for engine start to connect space root docs
-    this.disposables.push(
-      this.eventBus.on(WorkspaceEngineBeforeStart, () => {
-        // Connect all space root docs when engine is ready
-        this.connectAllSpaceRootDocs();
-      })
-    );
   }
 
   // Hidden doc IDs (docs in inaccessible spaces)
   readonly hiddenDocIds$ = new LiveData<string[]>([]);
-
-  /**
-   * Connect all space root documents to the sync engine.
-   * Called when the engine is ready.
-   */
-  private connectAllSpaceRootDocs() {
-    const spaces = this.spaces$.value;
-    for (const space of spaces.values()) {
-      if (!space.isConnected) {
-        space.connectRootDoc();
-      }
-    }
-  }
 
   private readonly pool = new ObjectPool<string, Space>({
     onDelete(obj: Space) {
@@ -60,11 +45,9 @@ export class SpaceService extends Service {
 
   // Spaces as entity objects
   readonly spaces$ = this.spacesData$.map((spaces: SpaceInfo[]) => {
-    // Track space IDs we've seen
-    const currentSpaceIds = new Set<string>();
+    // Track space IDs we've seen (for stale reference cleanup)
     spaces.forEach(info => {
       this.knownSpaceIds.add(info.id);
-      currentSpaceIds.add(info.id);
     });
 
     return new Map<string, Space>(
@@ -73,15 +56,9 @@ export class SpaceService extends Service {
         if (exists) {
           // Update existing entity with new data
           exists.obj.updateInfo(info);
-          // Ensure root doc is connected if not already
-          if (!exists.obj.isConnected) {
-            exists.obj.connectRootDoc();
-          }
           return [info.id, exists.obj];
         }
         const space = this.framework.createEntity(Space, { spaceInfo: info });
-        // Connect the space's root document to the sync engine
-        space.connectRootDoc();
         this.pool.put(info.id, space);
         return [info.id, space] as const;
       })
@@ -234,8 +211,6 @@ export class SpaceService extends Service {
 
     // Return the space entity
     const space = this.framework.createEntity(Space, { spaceInfo });
-    // Connect the space's root document to the sync engine
-    space.connectRootDoc();
     this.pool.put(spaceInfo.id, space);
     return space;
   }

@@ -26,7 +26,7 @@ export function configureSpaceModule(framework: Framework) {
   framework
     .scope(WorkspaceScope)
     .store(SpaceStore, [WorkspaceServerService, WorkspaceService])
-    .service(SpaceService, [SpaceStore])
+    .service(SpaceService, [SpaceStore, WorkspaceService])
     .service(SpaceMembersService, [SpaceStore])
     .entity(Space, [SpaceStore])
     .impl(DocCreateMiddleware('space'), SpaceDocCreateMiddleware, [

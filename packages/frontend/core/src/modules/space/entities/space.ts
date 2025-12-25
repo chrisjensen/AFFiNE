@@ -1,9 +1,5 @@
 import { Entity, LiveData } from '@toeverything/infra';
-import { combineLatest, map, startWith } from 'rxjs';
-import { Doc as YDoc } from 'yjs';
 
-import { WorkspaceEngineService } from '../../workspace';
-import { SpaceMetaImpl } from '../impls/meta';
 import {
   type DocRole,
   numericToDocRole,
@@ -12,6 +8,12 @@ import {
   type SpaceStore,
 } from '../stores/space';
 
+/**
+ * Space entity represents a space (folder/container) within a workspace.
+ *
+ * Space membership is tracked by the SpaceDoc table on the backend.
+ * The server is the single source of truth for which docs belong to a space.
+ */
 export class Space extends Entity<{ spaceInfo: SpaceInfo }> {
   constructor(private readonly store: SpaceStore) {
     super();
@@ -19,15 +21,6 @@ export class Space extends Entity<{ spaceInfo: SpaceInfo }> {
 
   readonly id = this.props.spaceInfo.id;
   readonly workspaceId = this.props.spaceInfo.workspaceId;
-
-  // Root Yjs document for this space (docId = spaceId, following workspace pattern)
-  readonly rootYDoc = new YDoc({ guid: this.id });
-
-  // Space metadata manager (manages meta.pages array)
-  readonly meta = new SpaceMetaImpl(this.rootYDoc);
-
-  // Track if root doc is connected to sync engine
-  private _isConnected = false;
 
   // LiveData for reactive updates
   readonly info$ = new LiveData<SpaceInfo>(this.props.spaceInfo);
@@ -41,28 +34,8 @@ export class Space extends Entity<{ spaceInfo: SpaceInfo }> {
   );
   readonly docCount$ = this.info$.map((info: SpaceInfo) => info.docCount);
 
-  // Derive docIds from server response (authoritative) with Yjs as reactive trigger
-  // Server response is the source of truth for which docs belong to this space
-  // Yjs doc may eventually provide real-time sync, but for now server is authoritative
-  readonly docIds$ = LiveData.from<string[]>(
-    combineLatest([
-      // Server-provided docIds from GraphQL response (authoritative)
-      this.info$.pipe(map((info: SpaceInfo) => info.docIds ?? [])),
-      // Yjs-synced docIds - used as a reactive trigger but server takes precedence
-      this.meta.docMetaUpdated.pipe(
-        startWith(undefined),
-        map(() => this.meta.docIds)
-      ),
-    ]).pipe(
-      map(([serverDocIds, _yjsDocIds]) => {
-        // Server response is authoritative - use it directly
-        // Yjs data is included in combineLatest to trigger re-evaluation
-        // when real-time sync eventually updates the Yjs doc
-        return serverDocIds;
-      })
-    ),
-    this.props.spaceInfo.docIds ?? []
-  );
+  // Doc IDs from server response (single source of truth)
+  readonly docIds$ = this.info$.map((info: SpaceInfo) => info.docIds ?? []);
 
   updateInfo(info: SpaceInfo) {
     this.info$.next(info);
@@ -108,53 +81,5 @@ export class Space extends Entity<{ spaceInfo: SpaceInfo }> {
 
   async moveDocToSpace(docId: string) {
     return this.store.moveDocToSpace(docId, this.id);
-  }
-
-  /**
-   * Connect the space's root document to the sync engine.
-   * This enables syncing the space's doc metadata (meta.pages).
-   * Should be called after the workspace engine is started.
-   */
-  connectRootDoc() {
-    if (this._isConnected) {
-      return;
-    }
-
-    try {
-      const engineService = this.framework.get(WorkspaceEngineService);
-      const engine = engineService.engine;
-
-      // Check if engine is started (has client initialized)
-      if (!engine.started) {
-        // Engine not started yet - will be connected via WorkspaceEngineBeforeStart event
-        return;
-      }
-
-      // Connect the space root doc to the sync engine
-      engine.doc.connectDoc(this.rootYDoc);
-
-      // NOTE: Do NOT call this.meta.initialize() here!
-      // The server is the source of truth for meta.pages.
-      // Calling initialize() would create an empty pages array locally
-      // which could conflict with the server data during Yjs merge.
-
-      this._isConnected = true;
-    } catch {
-      // Engine might not be available yet - this is ok, we'll retry later
-    }
-  }
-
-  /**
-   * Check if the space root doc is connected to the sync engine.
-   */
-  get isConnected() {
-    return this._isConnected;
-  }
-
-  override dispose() {
-    // The Yjs doc will be garbage collected, but we should
-    // explicitly mark as disconnected
-    this._isConnected = false;
-    super.dispose();
   }
 }

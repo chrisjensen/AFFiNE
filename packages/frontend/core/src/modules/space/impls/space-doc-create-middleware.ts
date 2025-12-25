@@ -1,9 +1,7 @@
 import { Service } from '@toeverything/infra';
 
-import type {
-  DocCreateMiddleware,
-  DocRecord,
-} from '../../doc/providers/doc-create-middleware';
+import type { DocRecord } from '../../doc/entities/record';
+import type { DocCreateMiddleware } from '../../doc/providers/doc-create-middleware';
 import type { DocCreateOptions } from '../../doc/types';
 import { GlobalContextService } from '../../global-context';
 import { WorkbenchService } from '../../workbench';
