@@ -170,6 +170,17 @@ export const MoveDocDialog = ({
       });
 
       if (result.moveDocToWorkspace.success) {
+        // Trigger workspace root doc refresh to pick up changes immediately
+        // This works for both websocket (CloudDocStorage) and HTTP (StaticCloudDocStorage) clients
+        try {
+          const workspaceRootDocId = currentWorkspaceId;
+          // Force sync engine to check for workspace root doc updates
+          await currentWorkspace.engine.doc.waitForSynced(workspaceRootDocId);
+        } catch (err) {
+          // Log but don't fail the move operation if refresh fails
+          console.warn('Failed to refresh workspace root doc after move:', err);
+        }
+
         notify.success({
           title: t['com.affine.moveDoc.success'](),
         });
