@@ -9,7 +9,7 @@ import {
   Map as YMap,
 } from 'yjs';
 
-import { PaginationInput } from '../base';
+import { EventBus, PaginationInput } from '../base';
 import { BaseModel } from './base';
 
 // Icon format matches frontend SpaceIconData type
@@ -28,6 +28,10 @@ interface DocMeta {
 
 @Injectable()
 export class SpaceDocModel extends BaseModel {
+  constructor(private readonly event: EventBus) {
+    super();
+  }
+
   /**
    * Add a doc to a space.
    */
@@ -168,11 +172,18 @@ export class SpaceDocModel extends BaseModel {
       pages.push([docMap]);
 
       const update = encodeStateAsUpdate(yDoc);
+      const timestamp = Date.now();
       await this.models.doc.upsert({
         spaceId: workspaceId,
         docId: workspaceId,
         blob: update,
-        timestamp: Date.now(),
+        timestamp,
+      });
+
+      // Emit event to trigger websocket broadcast
+      this.event.emit('workspace.rootDoc.updated', {
+        workspaceId,
+        timestamp,
       });
     } catch (error) {
       this.logger.error(

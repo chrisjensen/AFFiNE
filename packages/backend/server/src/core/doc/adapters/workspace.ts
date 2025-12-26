@@ -61,7 +61,25 @@ export class PgWorkspaceDocStorageAdapter extends DocStorageAdapter {
       return 0;
     }
 
-    const isNewDoc = !(await this.models.doc.exists(workspaceId, docId));
+    // Check if doc exists in THIS workspace
+    const existsInThisWorkspace = await this.models.doc.exists(
+      workspaceId,
+      docId
+    );
+
+    if (!existsInThisWorkspace) {
+      // Check if doc exists in ANY other workspace (was moved)
+      const existsElsewhere = await this.models.doc.existsAnywhere(docId);
+      if (existsElsewhere) {
+        // Doc was moved - reject stale updates from source workspace
+        this.logger.warn(
+          `Rejecting pushDocUpdates for moved doc ${docId} in workspace ${workspaceId}`
+        );
+        return 0; // Silently ignore - don't crash the frontend
+      }
+    }
+
+    const isNewDoc = !existsInThisWorkspace;
 
     let pendings = updates;
     let done = 0;

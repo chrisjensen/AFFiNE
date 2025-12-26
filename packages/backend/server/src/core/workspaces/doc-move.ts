@@ -330,7 +330,7 @@ export class DocMoveService {
       targetSpaceId ?? null
     );
 
-    // Copy blobs (only needed for cross-workspace, blobs are keyed by workspace)
+    // 4. Copy blobs (only needed for cross-workspace, blobs are keyed by workspace)
     await this.copyDocBlobs(sourceWorkspaceId, docId, targetWorkspaceId);
 
     // Move WorkspaceDoc metadata (mode, public status, etc.)
@@ -343,13 +343,13 @@ export class DocMoveService {
       await this.models.doc.deleteMeta(sourceWorkspaceId, docId);
     }
 
-    // 3. Update SpaceDoc mappings
+    // 5. Update SpaceDoc mappings
     await this.models.spaceDoc.removeDoc(sourceSpaceId ?? '', docId);
     if (targetSpaceId) {
       await this.models.spaceDoc.addDoc(targetSpaceId, docId);
     }
 
-    // 4. Update meta.pages in source and target containers
+    // 6. Update meta.pages in source and target containers
     await this.models.spaceDoc.removeDocFromRootMeta(
       sourceWorkspaceId,
       sourceContainerId,
@@ -362,7 +362,7 @@ export class DocMoveService {
       docMeta ?? undefined
     );
 
-    // 5. Ensure doc is in target workspace's meta.pages
+    // 7. Ensure doc is in target workspace's meta.pages
     await this.models.spaceDoc.ensureDocInWorkspaceMeta(
       targetWorkspaceId,
       docId

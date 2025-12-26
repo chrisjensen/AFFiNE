@@ -6,9 +6,10 @@ import {
   OnGatewayDisconnect,
   SubscribeMessage as RawSubscribeMessage,
   WebSocketGateway,
+  WebSocketServer,
 } from '@nestjs/websockets';
 import { ClsInterceptor } from 'nestjs-cls';
-import { Socket } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 
 import {
   CallMetric,
@@ -18,6 +19,7 @@ import {
   GatewayErrorWrapper,
   metrics,
   NotInSpace,
+  OnEvent,
   SpaceAccessDenied,
 } from '../../base';
 import { Models } from '../../models';
@@ -140,6 +142,9 @@ export class SpaceSyncGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
   protected logger = new Logger(SpaceSyncGateway.name);
+
+  @WebSocketServer()
+  private readonly server!: Server;
 
   private connectionCount = 0;
 
@@ -438,6 +443,48 @@ export class SpaceSyncGateway
       .emit('space:broadcast-awareness-update', message);
 
     return {};
+  }
+
+  @OnEvent('workspace.rootDoc.updated')
+  async broadcastWorkspaceRootDocUpdate({
+    workspaceId,
+    timestamp,
+  }: Events['workspace.rootDoc.updated']) {
+    try {
+      // Get workspace root doc blob
+      const docRecord = await this.docReader.getDoc(workspaceId, workspaceId);
+      if (!docRecord) {
+        this.logger.warn(
+          `Workspace root doc not found for workspace [${workspaceId}], cannot broadcast update`
+        );
+        return;
+      }
+
+      // Convert blob to base64 for websocket transmission
+      const updateBase64 = Buffer.from(docRecord.bin).toString('base64');
+
+      // Broadcast to all clients in the workspace sync room
+      // Use the same format as other doc update broadcasts
+      this.server
+        .to(`workspace:${Room(workspaceId, 'sync')}`)
+        .emit('space:broadcast-doc-update', {
+          spaceType: SpaceType.Workspace,
+          spaceId: workspaceId,
+          docId: workspaceId,
+          update: updateBase64,
+          timestamp: docRecord.timestamp,
+          editor: undefined, // System update, not from a user
+        });
+
+      this.logger.debug(
+        `Broadcast workspace root doc update for workspace [${workspaceId}]`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to broadcast workspace root doc update for workspace [${workspaceId}]`,
+        error
+      );
+    }
   }
 }
 

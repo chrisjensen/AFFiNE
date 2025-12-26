@@ -483,6 +483,12 @@ export const USER_FRIENDLY_ERRORS = {
     message: ({ docId }) =>
       `Document ${docId} is in trash. Restore it first to move it.`,
   },
+  doc_already_exists_in_workspace: {
+    type: 'resource_already_exists',
+    args: { docId: 'string', workspaceId: 'string' },
+    message: ({ docId, workspaceId }) =>
+      `Document ${docId} already exists in workspace ${workspaceId}. Cannot move document with duplicate ID.`,
+  },
   doc_update_blocked: {
     type: 'action_forbidden',
     args: { spaceId: 'string', docId: 'string' },

@@ -268,6 +268,18 @@ export class DocModel extends BaseModel {
   }
 
   /**
+   * Check if a doc exists in ANY workspace (snapshot only, not updates).
+   * Used to detect if a doc was moved to another workspace.
+   */
+  async existsAnywhere(docId: string): Promise<boolean> {
+    const snapshot = await this.db.snapshot.findFirst({
+      where: { id: docId },
+      select: { id: true },
+    });
+    return !!snapshot;
+  }
+
+  /**
    * Delete a doc and it's updates and snapshots.
    */
   @Transactional()

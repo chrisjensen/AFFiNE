@@ -26,6 +26,10 @@ declare global {
       workspaceId: string;
       quantity: number;
     };
+    'workspace.rootDoc.updated': {
+      workspaceId: string;
+      timestamp: number;
+    };
   }
 }
 
