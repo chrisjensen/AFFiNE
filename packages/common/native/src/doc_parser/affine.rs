@@ -220,8 +220,7 @@ pub fn parse_doc_to_markdown(
     }
 
     if flavour == "affine:table" {
-      let contents = gather_table_contents(block);
-      let table = contents.join("|");
+      let table = build_table_markdown(block);
       append_table_block(&mut markdown, &table);
       continue;
     }
@@ -688,11 +687,84 @@ fn gather_database_texts(block: &Map) -> (Vec<String>, Option<String>) {
   (texts, database_title)
 }
 
-fn gather_table_contents(block: &Map) -> Vec<String> {
-  let mut contents = Vec::new();
+struct TableEntry {
+  id: String,
+  order: String,
+}
+
+fn parse_table_rows(block: &Map) -> Vec<TableEntry> {
+  let mut rows: Vec<TableEntry> = Vec::new();
   for key in block.keys() {
-    if key.starts_with("prop:cells.") && key.ends_with(".text") {
-      if let Some(value) = block.get(key).and_then(|value| value_to_string(&value)) {
+    if key.starts_with("prop:rows.") && key.ends_with(".rowId") {
+      if let Some(row_id) = get_string(block, key) {
+        let order_key = key.replace(".rowId", ".order");
+        let order = get_string(block, &order_key).unwrap_or_default();
+        rows.push(TableEntry { id: row_id, order });
+      }
+    }
+  }
+  rows.sort_by(|a, b| a.order.cmp(&b.order));
+  rows
+}
+
+fn parse_table_columns(block: &Map) -> Vec<TableEntry> {
+  let mut columns: Vec<TableEntry> = Vec::new();
+  for key in block.keys() {
+    if key.starts_with("prop:columns.") && key.ends_with(".columnId") {
+      if let Some(col_id) = get_string(block, key) {
+        let order_key = key.replace(".columnId", ".order");
+        let order = get_string(block, &order_key).unwrap_or_default();
+        columns.push(TableEntry { id: col_id, order });
+      }
+    }
+  }
+  columns.sort_by(|a, b| a.order.cmp(&b.order));
+  columns
+}
+
+fn build_table_markdown(block: &Map) -> String {
+  let rows = parse_table_rows(block);
+  let columns = parse_table_columns(block);
+
+  if rows.is_empty() || columns.is_empty() {
+    return String::new();
+  }
+
+  let escape_table = |s: &str| s.replace('|', "\\|").replace('\n', "<br>");
+
+  let mut table = String::new();
+
+  for (row_idx, row) in rows.iter().enumerate() {
+    table.push('|');
+    for col in &columns {
+      let cell_key = format!("prop:cells.{}:{}.text", row.id, col.id);
+      let cell_text = get_string(block, &cell_key).unwrap_or_default();
+      table.push_str(&escape_table(cell_text.trim()));
+      table.push('|');
+    }
+    table.push('\n');
+
+    if row_idx == 0 {
+      table.push('|');
+      for _ in &columns {
+        table.push_str("---|");
+      }
+      table.push('\n');
+    }
+  }
+
+  table
+}
+
+fn gather_table_contents(block: &Map) -> Vec<String> {
+  let rows = parse_table_rows(block);
+  let columns = parse_table_columns(block);
+  let mut contents = Vec::new();
+
+  for row in &rows {
+    for col in &columns {
+      let cell_key = format!("prop:cells.{}:{}.text", row.id, col.id);
+      if let Some(value) = get_string(block, &cell_key) {
         if !value.is_empty() {
           contents.push(value);
         }
